@@ -6,10 +6,73 @@ import { addMeeting, fetchMeetings } from '../services/supabaseRepo';
 import { colors } from '../theme/colors';
 import { commonStyles } from '../theme/styles';
 
+// Função para converter data brasileira (dd/mm/aaaa) para ISO (aaaa-mm-dd)
+function brDateToISO(brDate: string): string | null {
+  const parts = brDate.split('/');
+  if (parts.length !== 3) return null;
+  
+  const day = parts[0].padStart(2, '0');
+  const month = parts[1].padStart(2, '0');
+  const year = parts[2];
+  
+  // Validar se é uma data válida
+  const date = new Date(`${year}-${month}-${day}`);
+  if (isNaN(date.getTime())) return null;
+  
+  return `${year}-${month}-${day}`;
+}
+
+// Função para converter data ISO (aaaa-mm-dd) para brasileira (dd/mm/aaaa)
+function isoDateToBR(isoDate: string): string {
+  try {
+    const parts = isoDate.split('-');
+    if (parts.length !== 3) return isoDate;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  } catch {
+    return isoDate;
+  }
+}
+
+// Função para aplicar máscara de data (dd/mm/aaaa)
+function applyDateMask(value: string): string {
+  // Remove tudo que não é número
+  const numbers = value.replace(/\D/g, '');
+  
+  // Aplica a máscara
+  if (numbers.length <= 2) {
+    return numbers;
+  } else if (numbers.length <= 4) {
+    return `${numbers.slice(0, 2)}/${numbers.slice(2)}`;
+  } else {
+    return `${numbers.slice(0, 2)}/${numbers.slice(2, 4)}/${numbers.slice(4, 8)}`;
+  }
+}
+
+// Função para aplicar máscara de hora (hh:mm)
+function applyTimeMask(value: string): string {
+  // Remove tudo que não é número
+  const numbers = value.replace(/\D/g, '');
+  
+  // Aplica a máscara
+  if (numbers.length <= 2) {
+    return numbers;
+  } else {
+    return `${numbers.slice(0, 2)}:${numbers.slice(2, 4)}`;
+  }
+}
+
 // Função para detectar o dia da semana automaticamente
 function getWeekdayFromDate(dateStr: string): WeekdayKind | null {
   try {
-    const date = new Date(dateStr);
+    // Se for formato brasileiro, converter para ISO primeiro
+    let isoDate = dateStr;
+    if (dateStr.includes('/')) {
+      const converted = brDateToISO(dateStr);
+      if (!converted) return null;
+      isoDate = converted;
+    }
+    
+    const date = new Date(isoDate);
     const day = date.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
     
     if (day === 4) return '5A'; // Quinta-feira
@@ -48,38 +111,63 @@ export default function MeetingsScreen() {
   }, []);
 
   const handleDateChange = (text: string) => {
-    setDate(text);
-    // Detectar automaticamente o dia da semana quando a data for válida
-    if (text.length === 10) { // yyyy-mm-dd
-      const detectedWeekday = getWeekdayFromDate(text);
+    // Aplica máscara automática
+    const masked = applyDateMask(text);
+    setDate(masked);
+    
+    // Detectar automaticamente o dia da semana quando a data for válida (dd/mm/aaaa = 10 caracteres)
+    if (masked.length === 10) {
+      const detectedWeekday = getWeekdayFromDate(masked);
       if (detectedWeekday) {
         setWeekday(detectedWeekday);
       }
     }
   };
 
+  const handleTimeChange = (text: string) => {
+    // Aplica máscara automática
+    const masked = applyTimeMask(text);
+    setTime(masked);
+  };
+
   const handleAdd = async () => {
     if (!date) {
-      Alert.alert('Atenção', 'Informe a data (yyyy-mm-dd)');
+      Alert.alert('Atenção', 'Informe a data (dd/mm/aaaa)');
       return;
     }
 
-    // Validar formato de data
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    // Validar formato de data brasileira
+    const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
     if (!dateRegex.test(date)) {
-      Alert.alert('Atenção', 'Formato de data inválido. Use yyyy-mm-dd (ex: 2025-12-20)');
+      Alert.alert('Atenção', 'Formato de data inválido. Use dd/mm/aaaa (ex: 20/01/2025)');
       return;
     }
 
-    // Validar formato de hora se informada
+    // Converter para ISO antes de salvar
+    const isoDate = brDateToISO(date);
+    if (!isoDate) {
+      Alert.alert('Atenção', 'Data inválida. Verifique se a data existe (ex: 20/01/2025)');
+      return;
+    }
+
+    // Validar formato de hora brasileira (hh:mm)
     if (time && !/^\d{2}:\d{2}$/.test(time)) {
       Alert.alert('Atenção', 'Formato de hora inválido. Use hh:mm (ex: 14:30)');
       return;
     }
 
+    // Validar hora (00:00 a 23:59)
+    if (time) {
+      const [hours, minutes] = time.split(':').map(Number);
+      if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        Alert.alert('Atenção', 'Hora inválida. Use valores entre 00:00 e 23:59');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
-      await addMeeting({ date, time: time || undefined, weekday, kind });
+      await addMeeting({ date: isoDate, time: time || undefined, weekday, kind });
       setDate('');
       setTime('');
       Alert.alert('Sucesso', 'Reunião cadastrada com sucesso!');
@@ -91,9 +179,9 @@ export default function MeetingsScreen() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDateBR = (isoDate: string) => {
     try {
-      const date = new Date(dateStr);
+      const date = new Date(isoDate);
       return date.toLocaleDateString('pt-BR', {
         weekday: 'long',
         year: 'numeric',
@@ -101,8 +189,13 @@ export default function MeetingsScreen() {
         day: 'numeric',
       });
     } catch {
-      return dateStr;
+      return isoDateToBR(isoDate);
     }
+  };
+
+  const formatTimeBR = (time: string | undefined) => {
+    if (!time) return '';
+    return time; // Já está no formato hh:mm
   };
 
   return (
@@ -114,7 +207,7 @@ export default function MeetingsScreen() {
         <Text style={styles.formTitle}>Nova Reunião</Text>
         
         <TextInput
-          placeholder="Data (yyyy-mm-dd)"
+          placeholder="Data (dd/mm/aaaa)"
           placeholderTextColor={colors.textTertiary}
           style={[
             commonStyles.input,
@@ -124,10 +217,12 @@ export default function MeetingsScreen() {
           onChangeText={handleDateChange}
           onFocus={() => setFocusedInput('date')}
           onBlur={() => setFocusedInput(null)}
+          keyboardType="numeric"
+          maxLength={10}
         />
         {date && date.length === 10 && (
           <Text style={styles.dateHint}>
-            📅 {formatDate(date)}
+            📅 {formatDateBR(brDateToISO(date) || date)}
           </Text>
         )}
         
@@ -139,10 +234,17 @@ export default function MeetingsScreen() {
             focusedInput === 'time' && commonStyles.inputFocused,
           ]}
           value={time}
-          onChangeText={setTime}
+          onChangeText={handleTimeChange}
           onFocus={() => setFocusedInput('time')}
           onBlur={() => setFocusedInput(null)}
+          keyboardType="numeric"
+          maxLength={5}
         />
+        {time && time.length === 5 && (
+          <Text style={styles.timeHint}>
+            ⏰ {time}
+          </Text>
+        )}
 
         <View style={styles.selectorGroup}>
           <Text style={commonStyles.label}>Dia da Semana</Text>
@@ -224,6 +326,7 @@ export default function MeetingsScreen() {
         contentContainerStyle={commonStyles.gap}
         renderItem={({ item }) => {
           const isPast = new Date(item.date) < new Date();
+          const dateBR = isoDateToBR(item.date);
           return (
             <View style={[commonStyles.card, isPast && styles.pastMeeting]}>
               <View style={styles.meetingHeader}>
@@ -232,7 +335,10 @@ export default function MeetingsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={commonStyles.cardTitle}>
-                    {formatDate(item.date)} {item.time ? `às ${item.time}` : ''}
+                    {formatDateBR(item.date)} {item.time ? `às ${formatTimeBR(item.time)}` : ''}
+                  </Text>
+                  <Text style={styles.dateDisplay}>
+                    {dateBR} {item.time ? `• ${item.time}` : ''}
                   </Text>
                   <View style={[commonStyles.row, { marginTop: 12 }]}>
                     <View style={[commonStyles.badge, commonStyles.badgeSuccess]}>
@@ -292,6 +398,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontStyle: 'italic',
   },
+  timeHint: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: -12,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
   meetingHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -307,6 +420,12 @@ const styles = StyleSheet.create({
   },
   meetingIcon: {
     fontSize: 24,
+  },
+  dateDisplay: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontWeight: '500',
   },
   pastMeeting: {
     opacity: 0.7,
