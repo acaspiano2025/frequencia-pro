@@ -8,8 +8,9 @@
 -- Esta política permite que o sistema verifique se um email está cadastrado
 -- mesmo antes do usuário estar autenticado (necessário para validação no login)
 
--- Remover política antiga
+-- Remover políticas antigas (se existirem)
 DROP POLICY IF EXISTS "Usuários autenticados podem ler usuários" ON users;
+DROP POLICY IF EXISTS "Permitir leitura de usuários para validação" ON users;
 
 -- Criar nova política que permite leitura para anon e authenticated
 -- Isso é necessário para validar emails durante o login
