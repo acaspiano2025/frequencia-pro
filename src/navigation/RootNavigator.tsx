@@ -102,17 +102,17 @@ export default function RootNavigator() {
     let mounted = true;
     let validationInProgress = false;
     
-    // Timeout de segurança para garantir que loading sempre termine
+    // Timeout de segurança para garantir que loading sempre termine (5 segundos)
     const loadingTimeout = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('Timeout de carregamento - forçando exibição da tela de login');
+        console.warn('Timeout de carregamento - forçando exibição da tela');
         setLoading(false);
         // Se não há sessão após timeout, mostrar login
         if (!session) {
           setSession(null);
         }
       }
-    }, 10000); // 10 segundos
+    }, 5000); // 5 segundos (reduzido para ser mais rápido)
     
     // Função para validar e processar sessão
     const validateAndSetSession = async (session: any) => {
@@ -205,13 +205,37 @@ export default function RootNavigator() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       
+      // Primeiro, mostrar a sessão sem validação para não travar o carregamento
       if (data.session) {
-        const validatedSession = await validateAndSetSession(data.session);
-        setSession(validatedSession);
+        setSession(data.session);
+        setLoading(false);
+        
+        // Validar em background (sem bloquear a UI)
+        validateAndSetSession(data.session).then((validatedSession) => {
+          if (mounted) {
+            if (validatedSession) {
+              setSession(validatedSession);
+            } else {
+              // Se a validação falhar, fazer logout
+              supabase.auth.signOut();
+              setSession(null);
+              if (Platform.OS === 'web') {
+                Alert.alert(
+                  'Acesso Negado',
+                  'Acesso não autorizado. Entre em contato com o administrador.',
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+          }
+        }).catch((error) => {
+          console.error('Erro na validação em background:', error);
+          // Em caso de erro, manter a sessão (pode ser problema temporário)
+        });
       } else {
         setSession(null);
+        setLoading(false);
       }
-      setLoading(false);
     }).catch((error) => {
       console.error('Erro ao carregar sessão:', error);
       if (mounted) {
