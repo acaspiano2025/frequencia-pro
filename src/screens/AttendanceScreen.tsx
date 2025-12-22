@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AttendanceRecord, Member, Meeting } from '../domain/types';
-import { fetchAttendance, fetchMeetings, fetchMembers, upsertAttendance } from '../services/supabaseRepo';
+import { deleteMeeting, fetchAttendance, fetchMeetings, fetchMembers, upsertAttendance } from '../services/supabaseRepo';
 import { colors } from '../theme/colors';
 import { commonStyles } from '../theme/styles';
 
@@ -199,6 +199,65 @@ export default function AttendanceScreen() {
     setAutocompleteSuggestions([]);
   };
 
+  // Função para excluir reunião
+  const handleDeleteMeeting = async (meeting: Meeting) => {
+    if (!meeting || !meeting.id) {
+      Alert.alert('Erro', 'Reunião inválida para exclusão.');
+      return;
+    }
+    
+    const message = `Tem certeza que deseja excluir esta reunião?`;
+    
+    let confirmed = false;
+    
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
+      confirmed = window.confirm(message);
+    } else {
+      confirmed = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          'Confirmar Exclusão',
+          message,
+          [
+            { 
+              text: 'Não', 
+              style: 'cancel',
+              onPress: () => resolve(false)
+            },
+            {
+              text: 'Sim',
+              style: 'destructive',
+              onPress: () => resolve(true)
+            },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) }
+        );
+      });
+    }
+    
+    if (!confirmed) return;
+    
+    if (loading) return;
+    
+    setLoading(true);
+    try {
+      await deleteMeeting(meeting.id);
+      
+      // Se a reunião excluída estava selecionada, limpar seleção
+      if (selectedMeeting?.id === meeting.id) {
+        setSelectedMeeting(null);
+      }
+      
+      // Recarregar lista
+      await load();
+      Alert.alert('Sucesso', 'Reunião excluída com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao excluir reunião:', err);
+      Alert.alert('Erro', err?.message ?? 'Falha ao excluir reunião. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={commonStyles.container}>
       <Text style={commonStyles.title}>Frequência</Text>
@@ -216,29 +275,40 @@ export default function AttendanceScreen() {
             const selected = selectedMeeting?.id === item.id;
             const dateBR = isoDateToBR(item.date);
             return (
-              <TouchableOpacity
-                onPress={() => setSelectedMeeting(item)}
-                style={[
-                  commonStyles.chip,
-                  selected && commonStyles.chipActive,
-                  { 
-                    paddingVertical: 12, 
-                    paddingHorizontal: 20,
-                    minWidth: 140,
-                    alignItems: 'center',
-                  },
-                ]}
-              >
-                <Text
+              <View style={{ position: 'relative' }}>
+                <TouchableOpacity
+                  onPress={() => setSelectedMeeting(item)}
                   style={[
-                    commonStyles.chipText,
-                    selected && commonStyles.chipTextActive,
-                    { textAlign: 'center' },
+                    commonStyles.chip,
+                    selected && commonStyles.chipActive,
+                    { 
+                      paddingVertical: 12, 
+                      paddingHorizontal: 20,
+                      minWidth: 140,
+                      alignItems: 'center',
+                    },
                   ]}
                 >
-                  {dateBR} · {item.weekday}
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      commonStyles.chipText,
+                      selected && commonStyles.chipTextActive,
+                      { textAlign: 'center' },
+                    ]}
+                  >
+                    {dateBR} · {item.weekday}
+                  </Text>
+                </TouchableOpacity>
+                {selected && (
+                  <TouchableOpacity
+                    onPress={() => handleDeleteMeeting(item)}
+                    style={styles.deleteMeetingButton}
+                    disabled={loading}
+                  >
+                    <Text style={styles.deleteMeetingButtonText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             );
           }}
           ListEmptyComponent={
@@ -561,5 +631,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+  deleteMeetingButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  deleteMeetingButtonText: {
+    color: colors.surface,
+    fontSize: 14,
+    fontWeight: 'bold',
+    lineHeight: 16,
   },
 });

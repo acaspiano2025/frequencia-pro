@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Meeting, MeetingKind, WeekdayKind } from '../domain/types';
 import { addMeeting, deleteMeeting, fetchMeetings, updateMeeting } from '../services/supabaseRepo';
@@ -100,7 +100,6 @@ export default function MeetingsScreen() {
   const [kind, setKind] = useState<MeetingKind>('NORMAL');
   const [loading, setLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
-  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
 
   const load = async () => {
@@ -202,7 +201,6 @@ export default function MeetingsScreen() {
       setDate('');
       setTime('');
       setEditingMeeting(null);
-      setSelectedMeetingId(null);
       await load();
     } catch (err: any) {
       console.error('Erro ao salvar reunião:', err);
@@ -212,20 +210,8 @@ export default function MeetingsScreen() {
     }
   };
 
-  const handleSelectMeeting = (meetingId: string) => {
-    if (selectedMeetingId === meetingId) {
-      setSelectedMeetingId(null);
-      if (editingMeeting?.id === meetingId) {
-        cancelEdit();
-      }
-    } else {
-      setSelectedMeetingId(meetingId);
-    }
-  };
-
   const handleEdit = (meeting: Meeting) => {
     setEditingMeeting(meeting);
-    setSelectedMeetingId(meeting.id);
     // Preencher formulário com dados da reunião
     setDate(isoDateToBR(meeting.date));
     setTime(meeting.time || '');
@@ -235,70 +221,10 @@ export default function MeetingsScreen() {
 
   const cancelEdit = () => {
     setEditingMeeting(null);
-    setSelectedMeetingId(null);
     setDate('');
     setTime('');
     setWeekday('5A');
     setKind('NORMAL');
-  };
-
-  const handleDelete = async (meeting: Meeting) => {
-    if (!meeting || !meeting.id) {
-      Alert.alert('Erro', 'Reunião inválida para exclusão.');
-      return;
-    }
-    
-    const message = `⚠️ Confirmar Exclusão\n\nDeseja realmente excluir esta reunião?\n\nData: ${isoDateToBR(meeting.date)}\nDia: ${meeting.weekday}\nTipo: ${meeting.kind}\n\nEsta ação não pode ser desfeita e todos os registros de frequência relacionados serão removidos.`;
-    
-    let confirmed = false;
-    
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
-      confirmed = window.confirm(message);
-    } else {
-      confirmed = await new Promise<boolean>((resolve) => {
-        Alert.alert(
-          'Confirmar Exclusão',
-          `Deseja realmente excluir esta reunião?\n\nData: ${isoDateToBR(meeting.date)}\nDia: ${meeting.weekday}\nTipo: ${meeting.kind}\n\nEsta ação não pode ser desfeita.`,
-          [
-            { 
-              text: 'Cancelar', 
-              style: 'cancel',
-              onPress: () => resolve(false)
-            },
-            {
-              text: 'Excluir',
-              style: 'destructive',
-              onPress: () => resolve(true)
-            },
-          ],
-          { cancelable: true, onDismiss: () => resolve(false) }
-        );
-      });
-    }
-    
-    if (!confirmed) return;
-    
-    if (loading) return;
-    
-    setLoading(true);
-    try {
-      await deleteMeeting(meeting.id);
-      
-      if (selectedMeetingId === meeting.id) {
-        setSelectedMeetingId(null);
-      }
-      if (editingMeeting?.id === meeting.id) {
-        cancelEdit();
-      }
-      
-      await load();
-      Alert.alert('Sucesso', 'Reunião excluída com sucesso!');
-    } catch (err: any) {
-      console.error('Erro ao excluir reunião:', err);
-      Alert.alert('Erro', err?.message ?? 'Falha ao excluir reunião. Tente novamente.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const formatDateBR = (isoDate: string): string => {
@@ -331,7 +257,7 @@ export default function MeetingsScreen() {
   };
 
   return (
-    <View style={commonStyles.container}>
+    <ScrollView style={commonStyles.container} contentContainerStyle={{ paddingBottom: 20 }}>
       <Text style={commonStyles.title}>Reuniões</Text>
       <Text style={commonStyles.caption}>Agende e gerencie suas reuniões</Text>
 
@@ -477,90 +403,59 @@ export default function MeetingsScreen() {
       <FlatList
         data={meetings}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={commonStyles.gap}
+        contentContainerStyle={[commonStyles.gap, { paddingBottom: 20 }]}
         renderItem={({ item }) => {
           const isPast = new Date(item.date) < new Date();
           const dateBR = isoDateToBR(item.date);
-          const isSelected = selectedMeetingId === item.id;
+          
+          // Determinar status da reunião
+          // Por enquanto, todas são "Ativa" (podemos adicionar lógica de "Alterada" no futuro)
+          const status = 'Ativa';
+          const statusColor = colors.success;
           
           return (
-            <View
-              style={[
-                commonStyles.card,
-                isPast && styles.pastMeeting,
-                isSelected && styles.selectedCard,
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => handleSelectMeeting(item.id)}
-                activeOpacity={0.7}
-                style={{ flex: 1 }}
-              >
-                <View style={styles.meetingHeader}>
-                  <View style={styles.meetingIconContainer}>
-                    <Text style={styles.meetingIcon}>📅</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={commonStyles.cardTitle}>
-                      {item.time 
-                        ? `${formatDateBR(item.date)} às ${formatTimeBR(item.time)}`
-                        : formatDateBR(item.date)}
-                    </Text>
-                    <Text style={styles.dateDisplay}>
-                      {item.time 
-                        ? `${dateBR} • ${item.time}`
-                        : dateBR}
-                    </Text>
-                    <View style={[commonStyles.row, { marginTop: 12 }]}>
-                      <View style={[commonStyles.badge, commonStyles.badgeSuccess]}>
-                        <Text style={[commonStyles.badgeText, commonStyles.badgeTextSuccess]}>
-                          {item.weekday}
+            <View style={[commonStyles.card, isPast && styles.pastMeeting]}>
+              <View style={styles.meetingHeader}>
+                <View style={styles.meetingIconContainer}>
+                  <Text style={styles.meetingIcon}>📅</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={commonStyles.cardTitle}>
+                    {item.time 
+                      ? `${formatDateBR(item.date)} às ${formatTimeBR(item.time)}`
+                      : formatDateBR(item.date)}
+                  </Text>
+                  <Text style={styles.dateDisplay}>
+                    {item.time 
+                      ? `${dateBR} • ${item.time}`
+                      : dateBR}
+                  </Text>
+                  <View style={[commonStyles.row, { marginTop: 12, flexWrap: 'wrap', gap: 8 }]}>
+                    <View style={[commonStyles.badge, commonStyles.badgeSuccess]}>
+                      <Text style={[commonStyles.badgeText, commonStyles.badgeTextSuccess]}>
+                        {item.weekday}
+                      </Text>
+                    </View>
+                    <View style={[commonStyles.badge, commonStyles.badgeWarning]}>
+                      <Text style={[commonStyles.badgeText, commonStyles.badgeTextWarning]}>
+                        {item.kind}
+                      </Text>
+                    </View>
+                    <View style={[commonStyles.badge, { backgroundColor: statusColor + '20' }]}>
+                      <Text style={[commonStyles.badgeText, { color: statusColor }]}>
+                        {status}
+                      </Text>
+                    </View>
+                    {isPast && (
+                      <View style={[commonStyles.badge, { backgroundColor: colors.textTertiary + '20' }]}>
+                        <Text style={[commonStyles.badgeText, { color: colors.textTertiary }]}>
+                          Realizada
                         </Text>
                       </View>
-                      <View style={[commonStyles.badge, commonStyles.badgeWarning]}>
-                        <Text style={[commonStyles.badgeText, commonStyles.badgeTextWarning]}>
-                          {item.kind}
-                        </Text>
-                      </View>
-                      {isPast && (
-                        <View style={[commonStyles.badge, { backgroundColor: colors.textTertiary + '20' }]}>
-                          <Text style={[commonStyles.badgeText, { color: colors.textTertiary }]}>
-                            Realizada
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                  {isSelected && (
-                    <View style={styles.selectedIndicator}>
-                      <Text style={styles.selectedIndicatorText}>✓</Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-              
-              {/* Botões de Ação - Só aparecem quando selecionado */}
-              {isSelected && (
-                <View style={styles.actionsContainer}>
-                  <Text style={styles.actionsLabel}>Ações:</Text>
-                  <View style={[commonStyles.row, { gap: 8 }]}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.editButton]}
-                      onPress={() => handleEdit(item)}
-                      disabled={loading}
-                    >
-                      <Text style={styles.actionButtonText}>✏️ Alterar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.deleteButton]}
-                      onPress={() => handleDelete(item)}
-                      disabled={loading}
-                    >
-                      <Text style={styles.actionButtonText}>🗑️ Excluir</Text>
-                    </TouchableOpacity>
+                    )}
                   </View>
                 </View>
-              )}
+              </View>
             </View>
           );
         }}
@@ -574,8 +469,9 @@ export default function MeetingsScreen() {
         }
         refreshing={loading}
         onRefresh={load}
+        scrollEnabled={false}
       />
-    </View>
+    </ScrollView>
   );
 }
 
