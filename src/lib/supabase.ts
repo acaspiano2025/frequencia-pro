@@ -26,6 +26,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true, // Importante para processar o callback do OAuth no web
+    // Configurações de cookies para evitar bounce tracking
+    cookieOptions: {
+      name: 'sb-auth-token',
+      domain: isWeb ? window.location.hostname : undefined,
+      maxAge: 60 * 60 * 24 * 7, // 7 dias
+      sameSite: 'lax' as const,
+      secure: isWeb ? window.location.protocol === 'https:' : true,
+      path: '/',
+    },
     // No web, usamos o storage padrão (localStorage). No mobile, usamos SecureStore.
     storage: isWeb ? undefined : secureStoreAdapter,
   },

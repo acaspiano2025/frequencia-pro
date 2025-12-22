@@ -102,7 +102,7 @@ export default function RootNavigator() {
     let mounted = true;
     let validationInProgress = false;
     
-    // Timeout de segurança para garantir que loading sempre termine (5 segundos)
+    // Timeout de segurança para garantir que loading sempre termine (3 segundos)
     const loadingTimeout = setTimeout(() => {
       if (mounted && loading) {
         console.warn('Timeout de carregamento - forçando exibição da tela');
@@ -112,7 +112,7 @@ export default function RootNavigator() {
           setSession(null);
         }
       }
-    }, 5000); // 5 segundos (reduzido para ser mais rápido)
+    }, 3000); // 3 segundos (reduzido para carregar mais rápido)
     
     // Função para validar e processar sessão
     const validateAndSetSession = async (session: any) => {
@@ -201,53 +201,74 @@ export default function RootNavigator() {
       }
     }
     
-    // Carregar sessão inicial
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      
-      // Primeiro, mostrar a sessão sem validação para não travar o carregamento
-      if (data.session) {
-        setSession(data.session);
-        setLoading(false);
+    // Carregar sessão inicial - apenas se houver hash de callback OAuth ou localStorage
+    // Isso evita chamadas automáticas desnecessárias ao Supabase
+    const loadInitialSession = async () => {
+      try {
+        // No web, verificar primeiro se há callback OAuth antes de chamar Supabase
+        if (Platform.OS === 'web') {
+          // Se não há callback e não há token salvo, pular a verificação inicial
+          const hasHash = window.location.hash.includes('access_token');
+          const hasToken = localStorage.getItem('sb-lpwsggnkwbyyjcytuiwh-auth-token');
+          
+          if (!hasHash && !hasToken) {
+            // Não há sessão prévia, mostrar login diretamente
+            setSession(null);
+            setLoading(false);
+            return;
+          }
+        }
         
-        // Validar em background (sem bloquear a UI)
-        validateAndSetSession(data.session).then((validatedSession) => {
-          if (mounted) {
-            if (validatedSession) {
-              console.log('✅ Sessão validada com sucesso');
-              setSession(validatedSession);
-            } else {
-              console.warn('⚠️ Validação falhou - removendo sessão');
-              // Se a validação falhar, fazer logout
-              supabase.auth.signOut();
-              setSession(null);
-              if (Platform.OS === 'web') {
-                setTimeout(() => {
-                  Alert.alert(
-                    'Acesso Negado',
-                    'Acesso não autorizado. Entre em contato com o administrador.',
-                    [{ text: 'OK' }]
-                  );
-                }, 500);
+        // Carregar sessão apenas se houver indicativo de sessão
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        
+        if (data.session) {
+          // Primeiro, mostrar a sessão sem validação para não travar o carregamento
+          setSession(data.session);
+          setLoading(false);
+          
+          // Validar em background (sem bloquear a UI)
+          validateAndSetSession(data.session).then((validatedSession) => {
+            if (mounted) {
+              if (validatedSession) {
+                console.log('✅ Sessão validada com sucesso');
+                setSession(validatedSession);
+              } else {
+                console.warn('⚠️ Validação falhou - removendo sessão');
+                // Se a validação falhar, fazer logout
+                supabase.auth.signOut();
+                setSession(null);
+                if (Platform.OS === 'web') {
+                  setTimeout(() => {
+                    Alert.alert(
+                      'Acesso Negado',
+                      'Acesso não autorizado. Entre em contato com o administrador.',
+                      [{ text: 'OK' }]
+                    );
+                  }, 500);
+                }
               }
             }
-          }
-        }).catch((error) => {
-          console.error('❌ Erro na validação em background:', error);
-          // Em caso de erro, manter a sessão por enquanto (pode ser problema temporário)
-          console.warn('⚠️ Mantendo sessão devido a erro na validação');
-        });
-      } else {
-        setSession(null);
-        setLoading(false);
+          }).catch((error) => {
+            console.error('❌ Erro na validação em background:', error);
+            // Em caso de erro, manter a sessão por enquanto (pode ser problema temporário)
+            console.warn('⚠️ Mantendo sessão devido a erro na validação');
+          });
+        } else {
+          setSession(null);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar sessão:', error);
+        if (mounted) {
+          setSession(null);
+          setLoading(false);
+        }
       }
-    }).catch((error) => {
-      console.error('Erro ao carregar sessão:', error);
-      if (mounted) {
-        setSession(null);
-        setLoading(false);
-      }
-    });
+    };
+    
+    loadInitialSession();
     
     // Escutar mudanças na autenticação
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
