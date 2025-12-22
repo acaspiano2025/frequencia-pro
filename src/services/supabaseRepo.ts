@@ -45,7 +45,10 @@ export async function updateMember(
 
 export async function deleteMember(id: string) {
   const res = await supabase.from('members').delete().eq('id', id);
-  handle(res);
+  if (res.error) {
+    throw res.error;
+  }
+  return res.data;
 }
 
 // Meetings -----------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Member } from '../domain/types';
 import { addMember, deleteMember, fetchMembers, updateMember } from '../services/supabaseRepo';
@@ -58,13 +58,28 @@ export default function MembersScreen() {
   }, [members, searchTerm]);
 
   const handleAdd = async () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       Alert.alert('Atenção', 'Informe o nome.');
       return;
     }
+    
+    // Verificar se já existe um membro com o mesmo nome (ignorando maiúsculas/minúsculas e acentos)
+    const normalizedNewName = normalizeText(trimmedName);
+    const duplicateMember = members.find((member) => {
+      if (!member.name) return false;
+      const normalizedMemberName = normalizeText(member.name.trim());
+      return normalizedMemberName === normalizedNewName;
+    });
+    
+    if (duplicateMember) {
+      Alert.alert('Atenção', `Já existe um membro cadastrado com o nome "${duplicateMember.name}".\n\nNão é permitido cadastrar nomes duplicados.`);
+      return;
+    }
+    
     setLoading(true);
     try {
-      await addMember({ name: name.trim(), evaluationRule });
+      await addMember({ name: trimmedName, evaluationRule });
       setName('');
       setEvaluationRule('AMBAS');
       Alert.alert('Sucesso', 'Membro adicionado com sucesso!');
@@ -99,14 +114,36 @@ export default function MembersScreen() {
   };
 
   const handleUpdate = async () => {
-    if (!editingMember || !name.trim()) {
+    if (!editingMember) {
+      Alert.alert('Atenção', 'Nenhum membro selecionado para edição.');
+      return;
+    }
+    
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       Alert.alert('Atenção', 'Informe o nome.');
       return;
     }
+    
+    // Verificar se já existe outro membro com o mesmo nome (ignorando o membro atual)
+    const normalizedNewName = normalizeText(trimmedName);
+    const duplicateMember = members.find((member) => {
+      // Ignorar o próprio membro que está sendo editado
+      if (member.id === editingMember.id) return false;
+      if (!member.name) return false;
+      const normalizedMemberName = normalizeText(member.name.trim());
+      return normalizedMemberName === normalizedNewName;
+    });
+    
+    if (duplicateMember) {
+      Alert.alert('Atenção', `Já existe um membro cadastrado com o nome "${duplicateMember.name}".\n\nNão é permitido cadastrar nomes duplicados.`);
+      return;
+    }
+    
     setLoading(true);
     try {
       await updateMember(editingMember.id, {
-        name: name.trim(),
+        name: trimmedName,
         evaluationRule,
       });
       setEditingMember(null);
@@ -122,36 +159,70 @@ export default function MembersScreen() {
     }
   };
 
-  const handleDelete = (member: Member) => {
-    Alert.alert(
-      'Confirmar Exclusão',
-      `Deseja realmente excluir o membro "${member.name}"?\n\nEsta ação não pode ser desfeita e todos os registros de frequência relacionados serão removidos.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await deleteMember(member.id);
-              setSelectedMemberId(null);
-              if (editingMember?.id === member.id) {
-                setEditingMember(null);
-                setName('');
-                setEvaluationRule('AMBAS');
-              }
-              Alert.alert('Sucesso', 'Membro excluído com sucesso!');
-              await load();
-            } catch (err: any) {
-              Alert.alert('Erro', err.message ?? 'Falha ao excluir membro');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ],
-    );
+  const handleDelete = async (member: Member) => {
+    if (!member || !member.id) {
+      Alert.alert('Erro', 'Membro inválido para exclusão.');
+      return;
+    }
+    
+    const message = `Deseja realmente excluir o membro "${member.name}"?\n\nEsta ação não pode ser desfeita e todos os registros de frequência relacionados serão removidos.`;
+    
+    // No web, usar window.confirm; no mobile, usar Alert.alert
+    let confirmed = false;
+    
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
+      confirmed = window.confirm(message);
+    } else {
+      // Para mobile, usar Alert.alert com Promise
+      confirmed = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          'Confirmar Exclusão',
+          message,
+          [
+            { 
+              text: 'Cancelar', 
+              style: 'cancel',
+              onPress: () => resolve(false)
+            },
+            {
+              text: 'Excluir',
+              style: 'destructive',
+              onPress: () => resolve(true)
+            },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) }
+        );
+      });
+    }
+    
+    if (!confirmed) return;
+    
+    if (loading) return; // Previne múltiplas execuções
+    
+    setLoading(true);
+    try {
+      await deleteMember(member.id);
+      
+      // Limpar seleção e edição se necessário
+      if (selectedMemberId === member.id) {
+        setSelectedMemberId(null);
+      }
+      if (editingMember?.id === member.id) {
+        setEditingMember(null);
+        setName('');
+        setEvaluationRule('AMBAS');
+      }
+      
+      // Recarregar lista
+      await load();
+      
+      Alert.alert('Sucesso', 'Membro excluído com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao excluir membro:', err);
+      Alert.alert('Erro', err?.message ?? 'Falha ao excluir membro. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const cancelEdit = () => {
@@ -316,34 +387,38 @@ export default function MembersScreen() {
           const badge = getRuleBadge(item.evaluationRule);
           const isSelected = selectedMemberId === item.id;
           return (
-            <TouchableOpacity
+            <View
               style={[
                 commonStyles.card,
                 isSelected && styles.selectedCard,
               ]}
-              onPress={() => handleSelectMember(item.id)}
-              activeOpacity={0.7}
             >
-              <View style={styles.memberHeader}>
-                <View style={styles.memberIconContainer}>
-                  <Text style={styles.memberIcon}>👤</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={commonStyles.cardTitle}>{item.name}</Text>
-                  <View style={[commonStyles.row, { marginTop: 12 }]}>
-                    <View style={[commonStyles.badge, { backgroundColor: badge.color + '20' }]}>
-                      <Text style={[commonStyles.badgeText, { color: badge.color }]}>
-                        {badge.emoji} {item.evaluationRule}
-                      </Text>
+              <TouchableOpacity
+                onPress={() => handleSelectMember(item.id)}
+                activeOpacity={0.7}
+                style={{ flex: 1 }}
+              >
+                <View style={styles.memberHeader}>
+                  <View style={styles.memberIconContainer}>
+                    <Text style={styles.memberIcon}>👤</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={commonStyles.cardTitle}>{item.name}</Text>
+                    <View style={[commonStyles.row, { marginTop: 12 }]}>
+                      <View style={[commonStyles.badge, { backgroundColor: badge.color + '20' }]}>
+                        <Text style={[commonStyles.badgeText, { color: badge.color }]}>
+                          {badge.emoji} {item.evaluationRule}
+                        </Text>
+                      </View>
                     </View>
                   </View>
+                  {isSelected && (
+                    <View style={styles.selectedIndicator}>
+                      <Text style={styles.selectedIndicatorText}>✓</Text>
+                    </View>
+                  )}
                 </View>
-                {isSelected && (
-                  <View style={styles.selectedIndicator}>
-                    <Text style={styles.selectedIndicatorText}>✓</Text>
-                  </View>
-                )}
-              </View>
+              </TouchableOpacity>
               
               {/* Botões de Ação - Só aparecem quando selecionado */}
               {isSelected && (
@@ -352,22 +427,32 @@ export default function MembersScreen() {
                   <View style={[commonStyles.row, { gap: 8 }]}>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.editButton]}
-                      onPress={() => handleEdit(item)}
+                      onPress={() => {
+                        if (!loading) {
+                          handleEdit(item);
+                        }
+                      }}
                       disabled={loading}
+                      activeOpacity={0.7}
                     >
                       <Text style={styles.actionButtonText}>✏️ Alterar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.deleteButton]}
-                      onPress={() => handleDelete(item)}
+                      onPress={() => {
+                        if (!loading) {
+                          handleDelete(item);
+                        }
+                      }}
                       disabled={loading}
+                      activeOpacity={0.7}
                     >
                       <Text style={styles.actionButtonText}>🗑️ Excluir</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               )}
-            </TouchableOpacity>
+            </View>
           );
         }}
         ListEmptyComponent={
