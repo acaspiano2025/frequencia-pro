@@ -270,3 +270,5 @@ vercel --prod
 
 **Para mais detalhes, consulte: `GUIA_COMPLETO_DESENVOLVIMENTO.md`**
 
+
+

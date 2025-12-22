@@ -97,3 +97,5 @@ Sempre que fizer alterações, repita os passos acima:
 
 **Importante**: Sempre faça os dois (Git + Vercel) para manter tudo sincronizado!
 
+
+

@@ -144,3 +144,5 @@ No Supabase, você precisa atualizar as URLs de redirecionamento:
 
 Para começar rápido, use a **Opção 1 (Vercel)** - é a mais simples e você terá seu app online em minutos!
 
+
+

@@ -85,3 +85,5 @@ CREATE POLICY "Users can insert attendance" ON attendance_records FOR INSERT WIT
 CREATE POLICY "Users can update attendance" ON attendance_records FOR UPDATE USING (auth.role() = 'authenticated');
 CREATE POLICY "Users can delete attendance" ON attendance_records FOR DELETE USING (auth.role() = 'authenticated');
 
+
+

@@ -59,3 +59,5 @@
 - Os timestamps `updated_at` são atualizados automaticamente quando um registro é modificado
 - As foreign keys garantem integridade referencial (ex: não é possível excluir um membro que tem registros de frequência sem antes excluir os registros)
 
+
+

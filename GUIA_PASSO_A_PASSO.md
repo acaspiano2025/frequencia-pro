@@ -220,3 +220,5 @@ Se todos os testes passaram, seu aplicativo está **100% funcional** e pronto pa
 - `SETUP_DATABASE.md` - Detalhes técnicos do banco
 - `FUNCIONALIDADES.md` - Lista completa de funcionalidades
 
+
+

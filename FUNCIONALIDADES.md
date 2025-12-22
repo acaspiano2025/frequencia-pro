@@ -99,3 +99,5 @@
 - Triggers para atualização automática de timestamps
 - Constraints para integridade referencial
 
+
+

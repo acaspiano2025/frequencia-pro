@@ -1,10 +1,38 @@
-import { useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AttendanceRecord, Member, Meeting } from '../domain/types';
 import { fetchAttendance, fetchMeetings, fetchMembers, upsertAttendance } from '../services/supabaseRepo';
 import { colors } from '../theme/colors';
 import { commonStyles } from '../theme/styles';
+
+const JUSTIFICATIVAS_CACHE_KEY = '@frequencia_pro:justificativas';
+
+// Função para salvar justificativa no cache
+const saveJustificativaToCache = async (text: string) => {
+  if (!text.trim()) return;
+  try {
+    const cached = await AsyncStorage.getItem(JUSTIFICATIVAS_CACHE_KEY);
+    const justificativas: string[] = cached ? JSON.parse(cached) : [];
+    // Adiciona se não existir e remove duplicatas
+    const unique = [...new Set([text.trim(), ...justificativas])].slice(0, 20); // Mantém apenas as últimas 20
+    await AsyncStorage.setItem(JUSTIFICATIVAS_CACHE_KEY, JSON.stringify(unique));
+  } catch (err) {
+    console.error('Erro ao salvar justificativa no cache:', err);
+  }
+};
+
+// Função para buscar justificativas do cache
+const getJustificativasFromCache = async (): Promise<string[]> => {
+  try {
+    const cached = await AsyncStorage.getItem(JUSTIFICATIVAS_CACHE_KEY);
+    return cached ? JSON.parse(cached) : [];
+  } catch (err) {
+    console.error('Erro ao buscar justificativas do cache:', err);
+    return [];
+  }
+};
 
 export default function AttendanceScreen() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -14,6 +42,8 @@ export default function AttendanceScreen() {
   const [loading, setLoading] = useState(false);
   const [justificationText, setJustificationText] = useState<{ [key: string]: string }>({});
   const [editingJustification, setEditingJustification] = useState<string | null>(null);
+  const [cachedJustificativas, setCachedJustificativas] = useState<string[]>([]);
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -36,6 +66,8 @@ export default function AttendanceScreen() {
 
   useEffect(() => {
     load();
+    // Carregar justificativas do cache
+    getJustificativasFromCache().then(setCachedJustificativas);
   }, []);
 
   // Carregar justificativas existentes quando a reunião selecionada mudar
@@ -84,11 +116,21 @@ export default function AttendanceScreen() {
     
     setLoading(true);
     try {
+      const justification = needsJustification ? justificationText[memberId] : undefined;
+      
+      // Salvar justificativa no cache
+      if (justification?.trim()) {
+        await saveJustificativaToCache(justification);
+        // Atualizar lista de cache local
+        const updated = await getJustificativasFromCache();
+        setCachedJustificativas(updated);
+      }
+      
       await upsertAttendance({
         memberId,
         meetingId: selectedMeeting.id,
         status,
-        justificationText: needsJustification ? justificationText[memberId] : undefined,
+        justificationText: justification,
       });
       await load();
     } catch (err: any) {
@@ -109,6 +151,27 @@ export default function AttendanceScreen() {
       return { style: commonStyles.badgeError, textStyle: commonStyles.badgeTextError, emoji: '❌' };
     }
     return { style: commonStyles.badge, textStyle: { color: colors.textTertiary }, emoji: '—' };
+  };
+
+  // Função para atualizar justificativa e filtrar sugestões
+  const handleJustificationChange = (memberId: string, text: string) => {
+    setJustificationText({ ...justificationText, [memberId]: text });
+    
+    // Filtrar sugestões baseado no texto digitado (apenas se estiver editando este membro)
+    if (editingJustification === memberId && text.trim().length > 0) {
+      const filtered = cachedJustificativas.filter((j) =>
+        j.toLowerCase().includes(text.toLowerCase())
+      );
+      setAutocompleteSuggestions(filtered.slice(0, 5)); // Máximo 5 sugestões
+    } else {
+      setAutocompleteSuggestions([]);
+    }
+  };
+
+  // Função para selecionar uma sugestão
+  const selectSuggestion = (memberId: string, suggestion: string) => {
+    setJustificationText({ ...justificationText, [memberId]: suggestion });
+    setAutocompleteSuggestions([]);
   };
 
   return (
@@ -167,70 +230,106 @@ export default function AttendanceScreen() {
         renderItem={({ item }) => {
           const status = currentStatus(item.id);
           const badge = getStatusBadge(status);
+          const isEditingJustification = editingJustification === item.id;
+          const currentJustif = justificationText[item.id] || currentJustification(item.id);
+          
           return (
             <View style={commonStyles.card}>
-              <View style={commonStyles.rowBetween}>
-                <View style={{ flex: 1 }}>
-                  <Text style={commonStyles.cardTitle}>{item.name}</Text>
-                </View>
-                <View style={[commonStyles.badge, badge.style]}>
-                  <Text style={[commonStyles.badgeText, badge.textStyle]}>
-                    {badge.emoji} {status}
+              {/* Nome e botões na mesma linha */}
+              <View style={[commonStyles.row, { alignItems: 'center', gap: 8, marginBottom: 12, justifyContent: 'space-between' }]}>
+                {/* Nome do membro à esquerda */}
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={[commonStyles.cardTitle, { flex: 1 }]} numberOfLines={1} ellipsizeMode="tail">
+                    {item.name}
                   </Text>
+                  {status !== '—' && (
+                    <View style={[commonStyles.badge, badge.style, { flexShrink: 0 }]}>
+                      <Text style={[commonStyles.badgeText, badge.textStyle]}>
+                        {badge.emoji} {status}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Botões de ação à direita */}
+                <View style={[commonStyles.row, { gap: 6, flexShrink: 0 }]}>
+                  <TouchableOpacity
+                    style={[styles.smallActionButton, styles.buttonOK, status === 'OK' && styles.buttonActive]}
+                    onPress={() => mark(item.id, 'OK')}
+                    disabled={loading}
+                  >
+                    <Text style={[styles.smallActionButtonText, status === 'OK' && styles.buttonActiveText]}>
+                      ✅ OK
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.smallActionButton, styles.buttonFalta, status === 'FALTA_SEM' && styles.buttonActive]}
+                    onPress={() => mark(item.id, 'FALTA_SEM')}
+                    disabled={loading}
+                  >
+                    <Text style={[styles.smallActionButtonText, status === 'FALTA_SEM' && styles.buttonActiveText]}>
+                      ❌ Falta
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.smallActionButton, styles.buttonJustificada, status === 'FALTA_JUST' && styles.buttonActive]}
+                    onPress={() => {
+                      if (currentJustif?.trim()) {
+                        mark(item.id, 'FALTA_JUST', true);
+                      } else {
+                        setEditingJustification(item.id);
+                        setAutocompleteSuggestions([]);
+                      }
+                    }}
+                    disabled={loading}
+                  >
+                    <Text style={[styles.smallActionButtonText, status === 'FALTA_JUST' && styles.buttonActiveText]}>
+                      ⚠️ Justificada
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              <View style={[commonStyles.row, { marginTop: 16, gap: 8 }]}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.buttonOK]}
-                  onPress={() => mark(item.id, 'OK')}
-                  disabled={loading}
-                >
-                  <Text style={styles.actionButtonText}>✅ OK</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.buttonFalta]}
-                  onPress={() => mark(item.id, 'FALTA_SEM')}
-                  disabled={loading}
-                >
-                  <Text style={styles.actionButtonText}>❌ Falta</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.buttonJustificada]}
-                  onPress={() => {
-                    if (justificationText[item.id]?.trim()) {
-                      mark(item.id, 'FALTA_JUST', true);
-                    } else {
-                      setEditingJustification(item.id);
-                    }
-                  }}
-                  disabled={loading}
-                >
-                  <Text style={styles.actionButtonText}>⚠️ Justificada</Text>
-                </TouchableOpacity>
-              </View>
-
-              {editingJustification === item.id ? (
+              {/* Campo de justificativa com autocomplete */}
+              {isEditingJustification && (
                 <View style={styles.justificationInputBox}>
                   <Text style={styles.justificationLabel}>Justificativa</Text>
-                  <TextInput
-                    placeholder="Motivo da falta..."
-                    placeholderTextColor={colors.textTertiary}
-                    style={[commonStyles.input, { marginBottom: 12, marginTop: 8 }]}
-                    value={justificationText[item.id] || ''}
-                    onChangeText={(text) =>
-                      setJustificationText({ ...justificationText, [item.id]: text })
-                    }
-                    multiline
-                  />
+                  <View style={styles.inputContainer}>
+                    <TextInput
+                      placeholder="Digite o motivo da falta..."
+                      placeholderTextColor={colors.textTertiary}
+                      style={[commonStyles.input, styles.justificationInput]}
+                      value={justificationText[item.id] || ''}
+                      onChangeText={(text) => handleJustificationChange(item.id, text)}
+                      multiline
+                      autoFocus
+                    />
+                    {/* Sugestões de autocomplete */}
+                    {autocompleteSuggestions.length > 0 && (
+                      <View style={styles.autocompleteContainer}>
+                        <ScrollView style={styles.autocompleteList} nestedScrollEnabled>
+                          {autocompleteSuggestions.map((suggestion, idx) => (
+                            <TouchableOpacity
+                              key={idx}
+                              style={styles.autocompleteItem}
+                              onPress={() => selectSuggestion(item.id, suggestion)}
+                            >
+                              <Text style={styles.autocompleteText}>{suggestion}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
                   <View style={commonStyles.row}>
                     <TouchableOpacity
                       style={[styles.smallButton, styles.buttonCancel]}
                       onPress={() => {
                         setEditingJustification(null);
                         setJustificationText({ ...justificationText, [item.id]: '' });
+                        setAutocompleteSuggestions([]);
                       }}
                     >
                       <Text style={styles.smallButtonText}>Cancelar</Text>
@@ -241,6 +340,7 @@ export default function AttendanceScreen() {
                         if (justificationText[item.id]?.trim()) {
                           mark(item.id, 'FALTA_JUST', true);
                           setEditingJustification(null);
+                          setAutocompleteSuggestions([]);
                         } else {
                           Alert.alert('Atenção', 'Informe a justificativa');
                         }
@@ -250,14 +350,24 @@ export default function AttendanceScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ) : (justificationText[item.id] || currentJustification(item.id)) ? (
+              )}
+
+              {/* Exibir justificativa salva (quando não está editando) */}
+              {!isEditingJustification && currentJustif && (
                 <View style={styles.justificationBox}>
                   <Text style={styles.justificationLabel}>Justificativa</Text>
-                  <Text style={styles.justificationText}>
-                    {justificationText[item.id] || currentJustification(item.id)}
-                  </Text>
+                  <Text style={styles.justificationText}>{currentJustif}</Text>
+                  <TouchableOpacity
+                    style={styles.editJustificationButton}
+                    onPress={() => {
+                      setEditingJustification(item.id);
+                      setAutocompleteSuggestions([]);
+                    }}
+                  >
+                    <Text style={styles.editJustificationText}>✏️ Editar</Text>
+                  </TouchableOpacity>
                 </View>
-              ) : null}
+              )}
             </View>
           );
         }}
@@ -277,33 +387,39 @@ export default function AttendanceScreen() {
 }
 
 const styles = StyleSheet.create({
-  actionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+  // Botões pequenos antes do nome
+  smallActionButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    minWidth: 60,
   },
   buttonOK: {
     backgroundColor: colors.success + '15',
-    borderWidth: 1.5,
     borderColor: colors.success,
   },
   buttonFalta: {
     backgroundColor: colors.error + '15',
-    borderWidth: 1.5,
     borderColor: colors.error,
   },
   buttonJustificada: {
     backgroundColor: colors.warning + '15',
-    borderWidth: 1.5,
     borderColor: colors.warning,
   },
-  actionButtonText: {
-    fontSize: 14,
+  buttonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  smallActionButtonText: {
+    fontSize: 12,
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+  buttonActiveText: {
+    color: colors.surface,
   },
   justificationBox: {
     marginTop: 16,
@@ -321,6 +437,45 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: colors.warning,
   },
+  inputContainer: {
+    position: 'relative',
+  },
+  justificationInput: {
+    marginBottom: 0,
+    marginTop: 8,
+    minHeight: 80,
+  },
+  autocompleteContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    marginTop: 4,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 150,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  autocompleteList: {
+    maxHeight: 150,
+  },
+  autocompleteItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  autocompleteText: {
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
   justificationLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -333,6 +488,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
     lineHeight: 22,
+    marginBottom: 8,
+  },
+  editJustificationButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: colors.primary + '15',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignSelf: 'flex-start',
+  },
+  editJustificationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
   },
   smallButton: {
     flex: 1,

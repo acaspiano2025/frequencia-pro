@@ -34,6 +34,7 @@ export default function MembersScreen() {
   const [focusedInput, setFocusedInput] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -79,7 +80,22 @@ export default function MembersScreen() {
     setEditingMember(member);
     setName(member.name);
     setEvaluationRule(member.evaluationRule);
+    setSelectedMemberId(member.id);
     // Scroll para o topo do formulário (opcional)
+  };
+
+  const handleSelectMember = (memberId: string) => {
+    // Se já está selecionado, desseleciona
+    if (selectedMemberId === memberId) {
+      setSelectedMemberId(null);
+      // Se estava editando, cancela a edição
+      if (editingMember?.id === memberId) {
+        cancelEdit();
+      }
+    } else {
+      // Seleciona o novo membro
+      setSelectedMemberId(memberId);
+    }
   };
 
   const handleUpdate = async () => {
@@ -94,6 +110,7 @@ export default function MembersScreen() {
         evaluationRule,
       });
       setEditingMember(null);
+      setSelectedMemberId(null);
       setName('');
       setEvaluationRule('AMBAS');
       Alert.alert('Sucesso', 'Membro atualizado com sucesso!');
@@ -118,6 +135,12 @@ export default function MembersScreen() {
             setLoading(true);
             try {
               await deleteMember(member.id);
+              setSelectedMemberId(null);
+              if (editingMember?.id === member.id) {
+                setEditingMember(null);
+                setName('');
+                setEvaluationRule('AMBAS');
+              }
               Alert.alert('Sucesso', 'Membro excluído com sucesso!');
               await load();
             } catch (err: any) {
@@ -133,6 +156,7 @@ export default function MembersScreen() {
 
   const cancelEdit = () => {
     setEditingMember(null);
+    setSelectedMemberId(null);
     setName('');
     setEvaluationRule('AMBAS');
   };
@@ -290,8 +314,16 @@ export default function MembersScreen() {
         contentContainerStyle={commonStyles.gap}
         renderItem={({ item }) => {
           const badge = getRuleBadge(item.evaluationRule);
+          const isSelected = selectedMemberId === item.id;
           return (
-            <View style={commonStyles.card}>
+            <TouchableOpacity
+              style={[
+                commonStyles.card,
+                isSelected && styles.selectedCard,
+              ]}
+              onPress={() => handleSelectMember(item.id)}
+              activeOpacity={0.7}
+            >
               <View style={styles.memberHeader}>
                 <View style={styles.memberIconContainer}>
                   <Text style={styles.memberIcon}>👤</Text>
@@ -306,29 +338,36 @@ export default function MembersScreen() {
                     </View>
                   </View>
                 </View>
+                {isSelected && (
+                  <View style={styles.selectedIndicator}>
+                    <Text style={styles.selectedIndicatorText}>✓</Text>
+                  </View>
+                )}
               </View>
               
-              {/* Botões de Ação */}
-              <View style={styles.actionsContainer}>
-                <Text style={styles.actionsLabel}>Ações:</Text>
-                <View style={[commonStyles.row, { gap: 8 }]}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.editButton]}
-                    onPress={() => handleEdit(item)}
-                    disabled={loading}
-                  >
-                    <Text style={styles.actionButtonText}>✏️ Alterar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDelete(item)}
-                    disabled={loading}
-                  >
-                    <Text style={styles.actionButtonText}>🗑️ Excluir</Text>
-                  </TouchableOpacity>
+              {/* Botões de Ação - Só aparecem quando selecionado */}
+              {isSelected && (
+                <View style={styles.actionsContainer}>
+                  <Text style={styles.actionsLabel}>Ações:</Text>
+                  <View style={[commonStyles.row, { gap: 8 }]}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.editButton]}
+                      onPress={() => handleEdit(item)}
+                      disabled={loading}
+                    >
+                      <Text style={styles.actionButtonText}>✏️ Alterar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.deleteButton]}
+                      onPress={() => handleDelete(item)}
+                      disabled={loading}
+                    >
+                      <Text style={styles.actionButtonText}>🗑️ Excluir</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            </View>
+              )}
+            </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
@@ -485,5 +524,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.primary,
+  },
+  selectedCard: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '05',
+  },
+  selectedIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  selectedIndicatorText: {
+    color: colors.surface,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
