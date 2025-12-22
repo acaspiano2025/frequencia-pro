@@ -390,7 +390,7 @@ export default function MeetingsScreen() {
                 ? 'Salvando...'
                 : editingMeeting
                   ? 'Atualizar Reunião'
-                  : 'Adicionar Reunião'}
+                  : '+ Reunião'}
             </Text>
           </TouchableOpacity>
         </View>
