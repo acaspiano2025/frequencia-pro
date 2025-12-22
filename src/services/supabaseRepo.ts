@@ -144,6 +144,7 @@ export async function upsertAttendance(payload: {
 // Users ------------------------------------------------------------------
 export async function fetchUserByEmail(email: string): Promise<User | null> {
   try {
+    console.log('🔍 Buscando usuário com email:', email);
     const res = await supabase
       .from('users')
       .select('*')
@@ -152,32 +153,40 @@ export async function fetchUserByEmail(email: string): Promise<User | null> {
       .single();
     
     if (res.error) {
+      console.error('❌ Erro ao buscar usuário:', res.error);
+      
       // Erro de RLS (Row Level Security) - política bloqueando acesso
       if (res.error.code === '42501' || res.error.message?.includes('permission denied') || res.error.message?.includes('row-level security')) {
         console.error('❌ ERRO RLS: Política de segurança bloqueando acesso à tabela users');
-        console.error('📝 Execute o script AJUSTAR_POLITICAS_RLS.sql no Supabase para corrigir');
-        console.error('Detalhes:', res.error);
+        console.error('📝 AÇÃO NECESSÁRIA: Execute o script AJUSTAR_POLITICAS_RLS.sql no Supabase');
+        console.error('Código do erro:', res.error.code);
+        console.error('Mensagem:', res.error.message);
         return null;
       }
       
-      if (res.error.code === 'PGRST116' || res.error.code === '42P01') {
-        // No rows returned ou tabela não existe
-        console.warn('Email não cadastrado ou tabela não encontrada:', email);
+      if (res.error.code === 'PGRST116') {
+        // No rows returned - email não cadastrado
+        console.warn('⚠️ Email não cadastrado:', email);
         return null;
       }
       
-      // Se for erro de tabela não existe, retornar null em vez de lançar erro
-      if (res.error.message?.includes('does not exist') || res.error.message?.includes('não existe')) {
-        console.warn('Tabela users não existe ainda. Criando estrutura...');
+      if (res.error.code === '42P01') {
+        // Tabela não existe
+        console.error('❌ Tabela users não existe! Execute SUPABASE_SETUP.sql');
         return null;
       }
       
-      console.error('Erro ao buscar usuário:', res.error);
-      throw res.error;
+      // Outros erros
+      console.error('❌ Erro desconhecido ao buscar usuário:', res.error);
+      return null;
     }
     
-    if (!res.data) return null;
+    if (!res.data) {
+      console.warn('⚠️ Nenhum dado retornado para o email:', email);
+      return null;
+    }
     
+    console.log('✅ Usuário encontrado:', res.data.email, '- Perfil:', res.data.perfil);
     return {
       id: res.data.id,
       email: res.data.email,
@@ -189,7 +198,7 @@ export async function fetchUserByEmail(email: string): Promise<User | null> {
     };
   } catch (error: any) {
     // Se houver qualquer erro (tabela não existe, etc), retornar null
-    console.error('Erro ao buscar usuário:', error);
+    console.error('❌ Erro catch ao buscar usuário:', error);
     return null;
   }
 }

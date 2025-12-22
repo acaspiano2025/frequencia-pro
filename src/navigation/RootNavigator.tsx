@@ -214,23 +214,28 @@ export default function RootNavigator() {
         validateAndSetSession(data.session).then((validatedSession) => {
           if (mounted) {
             if (validatedSession) {
+              console.log('✅ Sessão validada com sucesso');
               setSession(validatedSession);
             } else {
+              console.warn('⚠️ Validação falhou - removendo sessão');
               // Se a validação falhar, fazer logout
               supabase.auth.signOut();
               setSession(null);
               if (Platform.OS === 'web') {
-                Alert.alert(
-                  'Acesso Negado',
-                  'Acesso não autorizado. Entre em contato com o administrador.',
-                  [{ text: 'OK' }]
-                );
+                setTimeout(() => {
+                  Alert.alert(
+                    'Acesso Negado',
+                    'Acesso não autorizado. Entre em contato com o administrador.',
+                    [{ text: 'OK' }]
+                  );
+                }, 500);
               }
             }
           }
         }).catch((error) => {
-          console.error('Erro na validação em background:', error);
-          // Em caso de erro, manter a sessão (pode ser problema temporário)
+          console.error('❌ Erro na validação em background:', error);
+          // Em caso de erro, manter a sessão por enquanto (pode ser problema temporário)
+          console.warn('⚠️ Mantendo sessão devido a erro na validação');
         });
       } else {
         setSession(null);
