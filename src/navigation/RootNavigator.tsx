@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { enableScreens } from 'react-native-screens';
 
 import { supabase } from '../lib/supabase';
+import { validateUserEmail } from '../services/auth';
 import { colors } from '../theme/colors';
 import AttendanceScreen from '../screens/AttendanceScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -114,14 +115,26 @@ export default function RootNavigator() {
         supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
-        }).then(() => {
+        }).then(async () => {
           if (mounted) {
-            supabase.auth.getSession().then(({ data }) => {
-              if (mounted) {
-                setSession(data.session);
+            const { data } = await supabase.auth.getSession();
+            if (mounted && data.session?.user?.email) {
+              // Validar se o email está cadastrado
+              const isValid = await validateUserEmail(data.session.user.email);
+              if (!isValid) {
+                await supabase.auth.signOut();
+                Alert.alert(
+                  'Acesso Negado',
+                  'Acesso não autorizado. Entre em contato com o administrador.',
+                  [{ text: 'OK' }]
+                );
+                setSession(null);
                 setLoading(false);
+                return;
               }
-            });
+              setSession(data.session);
+            }
+            setLoading(false);
           }
         });
         return;
@@ -134,8 +147,29 @@ export default function RootNavigator() {
       setLoading(false);
     });
     
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       if (mounted) {
+        // Validar email quando uma nova sessão é criada
+        if (newSession?.user?.email) {
+          try {
+            const isValid = await validateUserEmail(newSession.user.email);
+            if (!isValid) {
+              await supabase.auth.signOut();
+              Alert.alert(
+                'Acesso Negado',
+                'Acesso não autorizado. Entre em contato com o administrador.',
+                [{ text: 'OK' }]
+              );
+              setSession(null);
+              return;
+            }
+          } catch (error) {
+            console.error('Erro ao validar email:', error);
+            await supabase.auth.signOut();
+            setSession(null);
+            return;
+          }
+        }
         setSession(newSession);
       }
     });

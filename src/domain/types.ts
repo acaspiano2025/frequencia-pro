@@ -57,3 +57,16 @@ export interface FrequenciaPorPessoa {
   totalFaltas: number;
 }
 
+export type UserProfile = 'Administrador' | 'Programador' | 'Operador';
+export type UserStatus = 'Ativo' | 'Inativo';
+
+export interface User {
+  id: string;
+  email: string;
+  nome_completo: string;
+  perfil: UserProfile;
+  status: UserStatus;
+  data_cadastro: string;
+  cadastrado_por?: string | null;
+}
+

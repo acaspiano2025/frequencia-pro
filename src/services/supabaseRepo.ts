@@ -3,6 +3,9 @@ import {
   AttendanceRecord,
   Member,
   Meeting,
+  User,
+  UserProfile,
+  UserStatus,
 } from '../domain/types';
 
 // Helpers ------------------------------------------------------------------
@@ -136,4 +139,137 @@ export async function upsertAttendance(payload: {
     justification_text: payload.justificationText ?? null,
   });
   handle(res);
+}
+
+// Users ------------------------------------------------------------------
+export async function fetchUserByEmail(email: string): Promise<User | null> {
+  const res = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email.toLowerCase())
+    .eq('status', 'Ativo')
+    .single();
+  
+  if (res.error) {
+    if (res.error.code === 'PGRST116') {
+      // No rows returned
+      return null;
+    }
+    throw res.error;
+  }
+  
+  if (!res.data) return null;
+  
+  return {
+    id: res.data.id,
+    email: res.data.email,
+    nome_completo: res.data.nome_completo,
+    perfil: res.data.perfil,
+    status: res.data.status,
+    data_cadastro: res.data.data_cadastro,
+    cadastrado_por: res.data.cadastrado_por ?? null,
+  };
+}
+
+export async function fetchUsers(): Promise<User[]> {
+  const res = await supabase
+    .from('users')
+    .select('*')
+    .order('data_cadastro', { ascending: false });
+  
+  return handle(res).map((row: any) => ({
+    id: row.id,
+    email: row.email,
+    nome_completo: row.nome_completo,
+    perfil: row.perfil,
+    status: row.status,
+    data_cadastro: row.data_cadastro,
+    cadastrado_por: row.cadastrado_por ?? null,
+  }));
+}
+
+export async function fetchOperators(): Promise<User[]> {
+  const res = await supabase
+    .from('users')
+    .select('*')
+    .eq('perfil', 'Operador')
+    .order('data_cadastro', { ascending: false });
+  
+  return handle(res).map((row: any) => ({
+    id: row.id,
+    email: row.email,
+    nome_completo: row.nome_completo,
+    perfil: row.perfil,
+    status: row.status,
+    data_cadastro: row.data_cadastro,
+    cadastrado_por: row.cadastrado_por ?? null,
+  }));
+}
+
+export async function createUser(payload: {
+  email: string;
+  nome_completo: string;
+  perfil: UserProfile;
+  cadastrado_por: string;
+}): Promise<User> {
+  // Validar se é Gmail
+  if (!payload.email.toLowerCase().endsWith('@gmail.com')) {
+    throw new Error('Apenas emails Gmail são permitidos');
+  }
+  
+  // Verificar se email já existe
+  const existing = await fetchUserByEmail(payload.email);
+  if (existing) {
+    throw new Error('Este email já está cadastrado');
+  }
+  
+  const res = await supabase.from('users').insert({
+    email: payload.email.toLowerCase(),
+    nome_completo: payload.nome_completo,
+    perfil: payload.perfil,
+    status: 'Ativo',
+    cadastrado_por: payload.cadastrado_por,
+  }).select().single();
+  
+  if (res.error) {
+    throw res.error;
+  }
+  
+  return {
+    id: res.data.id,
+    email: res.data.email,
+    nome_completo: res.data.nome_completo,
+    perfil: res.data.perfil,
+    status: res.data.status,
+    data_cadastro: res.data.data_cadastro,
+    cadastrado_por: res.data.cadastrado_por ?? null,
+  };
+}
+
+export async function updateUser(
+  id: string,
+  payload: {
+    nome_completo?: string;
+    status?: UserStatus;
+  },
+): Promise<User> {
+  const updateData: any = {};
+  if (payload.nome_completo !== undefined) updateData.nome_completo = payload.nome_completo;
+  if (payload.status !== undefined) updateData.status = payload.status;
+  
+  const res = await supabase.from('users').update(updateData).eq('id', id).select().single();
+  
+  if (res.error) {
+    throw res.error;
+  }
+  
+  return {
+    id: res.data.id,
+    email: res.data.email,
+    nome_completo: res.data.nome_completo,
+    perfil: res.data.perfil,
+    status: res.data.status,
+    data_cadastro: res.data.data_cadastro,
+    cadastrado_por: res.data.cadastrado_por ?? null,
+  };
 }

@@ -1,10 +1,5 @@
 import { supabase } from '../lib/supabase';
-
-export async function signInWithPassword(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  return data.session;
-}
+import { fetchUserByEmail } from './supabaseRepo';
 
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
@@ -15,6 +10,12 @@ export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
   return data.session;
+}
+
+// Validar se o email está cadastrado no sistema
+export async function validateUserEmail(email: string): Promise<boolean> {
+  const user = await fetchUserByEmail(email);
+  return user !== null;
 }
 
 // Google OAuth (Expo)
@@ -71,6 +72,16 @@ export async function signInWithGoogle() {
     if (result.type === 'success') {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
+      
+      // Validar se o email está cadastrado
+      if (sessionData.session?.user?.email) {
+        const isValid = await validateUserEmail(sessionData.session.user.email);
+        if (!isValid) {
+          await supabase.auth.signOut();
+          throw new Error('Acesso não autorizado. Entre em contato com o administrador.');
+        }
+      }
+      
       return sessionData.session;
     }
     throw new Error('Login com Google não concluído');
