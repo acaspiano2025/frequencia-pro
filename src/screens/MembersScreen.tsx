@@ -293,7 +293,7 @@ export default function MembersScreen() {
 
       <View style={[commonStyles.card, styles.formCard]}>
         <Text style={styles.formTitle}>
-          {editingMember ? 'Editar Membro' : 'Novo Membro'}
+          {editingMember ? 'Editar Membro' : 'Novo'}
         </Text>
         
         <TextInput
@@ -376,8 +376,8 @@ export default function MembersScreen() {
               {loading
                 ? 'Salvando...'
                 : editingMember
-                  ? '💾 Atualizar Membro'
-                  : '➕ Adicionar Membro'}
+                  ? 'Atualizar Membro'
+                  : 'Adicionar Membro'}
             </Text>
           </TouchableOpacity>
         </View>
