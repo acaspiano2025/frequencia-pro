@@ -101,7 +101,9 @@ export default function MembersScreen() {
     
     setLoading(true);
     try {
-      await addMember({ name: trimmedName, evaluationRule });
+      // Converter nome para CAIXA ALTA antes de salvar
+      const nameUpperCase = trimmedName.toUpperCase();
+      await addMember({ name: nameUpperCase, evaluationRule });
       setName('');
       setEvaluationRule('AMBAS');
       Alert.alert('Sucesso', 'Membro adicionado com sucesso!');
@@ -177,8 +179,10 @@ export default function MembersScreen() {
     
     setLoading(true);
     try {
+      // Converter nome para CAIXA ALTA antes de salvar
+      const nameUpperCase = trimmedName.toUpperCase();
       await updateMember(editingMember.id, {
-        name: trimmedName,
+        name: nameUpperCase,
         evaluationRule,
       });
       setEditingMember(null);
@@ -293,14 +297,17 @@ export default function MembersScreen() {
         </Text>
         
         <TextInput
-          placeholder="Nome do membro"
+          placeholder="Nome do membro (será convertido para CAIXA ALTA)"
           placeholderTextColor={colors.textTertiary}
           style={[
             commonStyles.input,
             focusedInput && commonStyles.inputFocused,
           ]}
           value={name}
-          onChangeText={setName}
+          onChangeText={(text) => {
+            // Converter para CAIXA ALTA em tempo real
+            setName(text.toUpperCase());
+          }}
           onFocus={() => setFocusedInput(true)}
           onBlur={() => setFocusedInput(false)}
         />
@@ -330,7 +337,7 @@ export default function MembersScreen() {
                       isActive && commonStyles.chipTextActive,
                     ]}
                   >
-                    {badge.emoji} {rule}
+                    {`${badge.emoji} ${rule}`}
                   </Text>
                 </TouchableOpacity>
               );
@@ -395,7 +402,7 @@ export default function MembersScreen() {
         </View>
         {searchTerm.length > 0 && (
           <Text style={styles.searchResults}>
-            {filteredMembers.length} {filteredMembers.length === 1 ? 'membro encontrado' : 'membros encontrados'}
+            {`${filteredMembers.length} ${filteredMembers.length === 1 ? 'membro encontrado' : 'membros encontrados'}`}
           </Text>
         )}
       </View>
@@ -442,7 +449,7 @@ export default function MembersScreen() {
                     <View style={[commonStyles.row, { marginTop: 12 }]}>
                       <View style={[commonStyles.badge, { backgroundColor: badge.color + '20' }]}>
                         <Text style={[commonStyles.badgeText, { color: badge.color }]}>
-                          {badge.emoji} {item.evaluationRule}
+                          {`${badge.emoji} ${item.evaluationRule}`}
                         </Text>
                       </View>
                     </View>

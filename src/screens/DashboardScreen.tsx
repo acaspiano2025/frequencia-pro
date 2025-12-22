@@ -121,7 +121,9 @@ export default function DashboardScreen() {
             </View>
             <View style={styles.nextMeetingContent}>
               <Text style={styles.nextMeetingDate}>
-                📅 {nextMeeting.date} {nextMeeting.time ? `às ${nextMeeting.time}` : ''}
+                {nextMeeting.time 
+                  ? `📅 ${nextMeeting.date} às ${nextMeeting.time}`
+                  : `📅 ${nextMeeting.date}`}
               </Text>
               <View style={styles.nextMeetingBadges}>
                 <View style={[commonStyles.badge, commonStyles.badgeSuccess]}>

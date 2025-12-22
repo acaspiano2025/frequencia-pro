@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AttendanceRecord, Member, Meeting } from '../domain/types';
@@ -8,6 +9,17 @@ import { colors } from '../theme/colors';
 import { commonStyles } from '../theme/styles';
 
 const JUSTIFICATIVAS_CACHE_KEY = '@frequencia_pro:justificativas';
+
+// Função para converter data ISO (aaaa-mm-dd) para brasileira (dd/mm/aaaa)
+function isoDateToBR(isoDate: string): string {
+  try {
+    const parts = isoDate.split('-');
+    if (parts.length !== 3) return isoDate;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  } catch {
+    return isoDate;
+  }
+}
 
 // Função para salvar justificativa no cache
 const saveJustificativaToCache = async (text: string) => {
@@ -56,7 +68,13 @@ export default function AttendanceScreen() {
       setMeetings(m.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setMembers(mem);
       setAttendance(att);
-      if (!selectedMeeting && m.length > 0) setSelectedMeeting(m[0]);
+      
+      // Se a reunião selecionada foi excluída, selecionar a primeira disponível ou limpar
+      if (selectedMeeting && !m.find(meeting => meeting.id === selectedMeeting.id)) {
+        setSelectedMeeting(m.length > 0 ? m[0] : null);
+      } else if (!selectedMeeting && m.length > 0) {
+        setSelectedMeeting(m[0]);
+      }
     } catch (err: any) {
       Alert.alert('Erro', err.message ?? 'Falha ao carregar dados');
     } finally {
@@ -69,6 +87,13 @@ export default function AttendanceScreen() {
     // Carregar justificativas do cache
     getJustificativasFromCache().then(setCachedJustificativas);
   }, []);
+
+  // Recarregar quando a aba receber foco (para sincronizar com mudanças na aba Reuniões)
+  useFocusEffect(
+    React.useCallback(() => {
+      load();
+    }, [])
+  );
 
   // Carregar justificativas existentes quando a reunião selecionada mudar
   useEffect(() => {
@@ -179,46 +204,57 @@ export default function AttendanceScreen() {
       <Text style={commonStyles.title}>Frequência</Text>
       <Text style={commonStyles.caption}>Registro de presenças e faltas</Text>
 
-      <Text style={[commonStyles.label, { marginBottom: 12 }]}>Selecione a Reunião</Text>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={meetings}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ gap: 12, marginBottom: 24, paddingRight: 4 }}
-        renderItem={({ item }) => {
-          const selected = selectedMeeting?.id === item.id;
-          return (
-            <TouchableOpacity
-              onPress={() => setSelectedMeeting(item)}
-              style={[
-                commonStyles.chip,
-                selected && commonStyles.chipActive,
-                { paddingVertical: 12, paddingHorizontal: 20 },
-              ]}
-            >
-              <Text
+      <View style={{ marginBottom: 16 }}>
+        <Text style={[commonStyles.label, { marginBottom: 12 }]}>Selecione a Reunião</Text>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={meetings}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ gap: 12, paddingRight: 4, paddingBottom: 4 }}
+          renderItem={({ item }) => {
+            const selected = selectedMeeting?.id === item.id;
+            const dateBR = isoDateToBR(item.date);
+            return (
+              <TouchableOpacity
+                onPress={() => setSelectedMeeting(item)}
                 style={[
-                  commonStyles.chipText,
-                  selected && commonStyles.chipTextActive,
+                  commonStyles.chip,
+                  selected && commonStyles.chipActive,
+                  { 
+                    paddingVertical: 12, 
+                    paddingHorizontal: 20,
+                    minWidth: 140,
+                    alignItems: 'center',
+                  },
                 ]}
               >
-                {item.date} · {item.weekday}
+                <Text
+                  style={[
+                    commonStyles.chipText,
+                    selected && commonStyles.chipTextActive,
+                    { textAlign: 'center' },
+                  ]}
+                >
+                  {dateBR} · {item.weekday}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={[commonStyles.card, { padding: 20, minWidth: 200 }]}>
+              <Text style={[commonStyles.caption, { textAlign: 'center' }]}>
+                Nenhuma reunião cadastrada
               </Text>
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={[commonStyles.card, { padding: 20 }]}>
-            <Text style={commonStyles.caption}>Nenhuma reunião cadastrada</Text>
-          </View>
-        }
-      />
+            </View>
+          }
+        />
+      </View>
 
       {selectedMeeting && (
         <View style={[commonStyles.card, { marginBottom: 24, padding: 16, backgroundColor: colors.primary + '08' }]}>
           <Text style={[commonStyles.caption, { color: colors.textPrimary, fontSize: 14 }]}>
-            📅 {selectedMeeting.date} · {selectedMeeting.weekday} · {selectedMeeting.kind}
+            {`📅 ${isoDateToBR(selectedMeeting.date)} · ${selectedMeeting.weekday} · ${selectedMeeting.kind}`}
           </Text>
         </View>
       )}
@@ -245,7 +281,7 @@ export default function AttendanceScreen() {
                   {status !== '—' && (
                     <View style={[commonStyles.badge, badge.style, { flexShrink: 0 }]}>
                       <Text style={[commonStyles.badgeText, badge.textStyle]}>
-                        {badge.emoji} {status}
+                        {`${badge.emoji} ${status}`}
                       </Text>
                     </View>
                   )}

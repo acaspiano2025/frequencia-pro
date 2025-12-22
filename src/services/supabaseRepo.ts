@@ -75,7 +75,10 @@ export async function addMeeting(payload: {
     weekday: payload.weekday,
     kind: payload.kind,
   });
-  handle(res);
+  if (res.error) {
+    throw res.error;
+  }
+  return res.data;
 }
 
 export async function updateMeeting(
@@ -94,12 +97,18 @@ export async function updateMeeting(
   if (payload.kind !== undefined) updateData.kind = payload.kind;
   
   const res = await supabase.from('meetings').update(updateData).eq('id', id);
-  handle(res);
+  if (res.error) {
+    throw res.error;
+  }
+  return res.data;
 }
 
 export async function deleteMeeting(id: string) {
   const res = await supabase.from('meetings').delete().eq('id', id);
-  handle(res);
+  if (res.error) {
+    throw res.error;
+  }
+  return res.data;
 }
 
 // Attendance ---------------------------------------------------------------
