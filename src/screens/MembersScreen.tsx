@@ -313,9 +313,9 @@ export default function MembersScreen() {
         />
 
         <View style={styles.selectorGroup}>
-          <Text style={commonStyles.label}>Regra de Avaliação</Text>
+          <Text style={styles.evaluationRuleLabel}>REGRA DE AVALIAÇÃO</Text>
           <Text style={[commonStyles.caption, { marginBottom: 16, fontSize: 14 }]}>
-            Define como a frequência será calculada para este membro
+            Definir como a frequência será calculada para este membro
           </Text>
           <View style={commonStyles.row}>
             {(['AMBAS', '5A', 'SAB'] as Member['evaluationRule'][]).map((rule) => {
@@ -533,6 +533,14 @@ const styles = StyleSheet.create({
   },
   selectorGroup: {
     marginBottom: 20,
+  },
+  evaluationRuleLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   searchCard: {
     marginBottom: 16,
