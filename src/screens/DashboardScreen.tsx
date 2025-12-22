@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, ScrollView } from 'react-native';
 
 import { atualizarFrequenciaPorPessoa, contagemMacro } from '../domain/frequency';
 import { fetchAttendance, fetchMeetings, fetchMembers } from '../services/supabaseRepo';
@@ -81,7 +81,11 @@ export default function DashboardScreen() {
   };
 
   return (
-    <View style={commonStyles.container}>
+    <ScrollView 
+      style={commonStyles.container}
+      contentContainerStyle={commonStyles.scrollContainer}
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={commonStyles.title}>Dashboard</Text>
       <Text style={commonStyles.caption}>Visão geral do sistema de frequência</Text>
 
@@ -149,13 +153,14 @@ export default function DashboardScreen() {
           </Text>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   cards: {
     gap: 16,
+    paddingBottom: 20,
   },
   statCard: {
     alignItems: 'center',
