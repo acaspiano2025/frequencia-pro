@@ -389,8 +389,8 @@ export default function MeetingsScreen() {
               {loading
                 ? 'Salvando...'
                 : editingMeeting
-                  ? '💾 Atualizar Reunião'
-                  : '➕ Adicionar Reunião'}
+                  ? 'Atualizar Reunião'
+                  : 'Adicionar Reunião'}
             </Text>
           </TouchableOpacity>
         </View>
