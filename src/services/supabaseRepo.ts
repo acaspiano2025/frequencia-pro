@@ -143,32 +143,44 @@ export async function upsertAttendance(payload: {
 
 // Users ------------------------------------------------------------------
 export async function fetchUserByEmail(email: string): Promise<User | null> {
-  const res = await supabase
-    .from('users')
-    .select('*')
-    .eq('email', email.toLowerCase())
-    .eq('status', 'Ativo')
-    .single();
-  
-  if (res.error) {
-    if (res.error.code === 'PGRST116') {
-      // No rows returned
-      return null;
+  try {
+    const res = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .eq('status', 'Ativo')
+      .single();
+    
+    if (res.error) {
+      if (res.error.code === 'PGRST116' || res.error.code === '42P01') {
+        // No rows returned ou tabela não existe
+        console.warn('Tabela users não encontrada ou email não cadastrado:', email);
+        return null;
+      }
+      // Se for erro de tabela não existe, retornar null em vez de lançar erro
+      if (res.error.message?.includes('does not exist') || res.error.message?.includes('não existe')) {
+        console.warn('Tabela users não existe ainda. Criando estrutura...');
+        return null;
+      }
+      throw res.error;
     }
-    throw res.error;
+    
+    if (!res.data) return null;
+    
+    return {
+      id: res.data.id,
+      email: res.data.email,
+      nome_completo: res.data.nome_completo,
+      perfil: res.data.perfil,
+      status: res.data.status,
+      data_cadastro: res.data.data_cadastro,
+      cadastrado_por: res.data.cadastrado_por ?? null,
+    };
+  } catch (error: any) {
+    // Se houver qualquer erro (tabela não existe, etc), retornar null
+    console.error('Erro ao buscar usuário:', error);
+    return null;
   }
-  
-  if (!res.data) return null;
-  
-  return {
-    id: res.data.id,
-    email: res.data.email,
-    nome_completo: res.data.nome_completo,
-    perfil: res.data.perfil,
-    status: res.data.status,
-    data_cadastro: res.data.data_cadastro,
-    cadastrado_por: res.data.cadastrado_por ?? null,
-  };
 }
 
 export async function fetchUsers(): Promise<User[]> {

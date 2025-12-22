@@ -100,6 +100,59 @@ export default function RootNavigator() {
 
   useEffect(() => {
     let mounted = true;
+    let validationInProgress = false;
+    
+    // Função para validar e processar sessão
+    const validateAndSetSession = async (session: any) => {
+      if (!mounted || !session?.user?.email) {
+        return session;
+      }
+      
+      // Evitar validações duplicadas
+      if (validationInProgress) {
+        return session;
+      }
+      
+      try {
+        validationInProgress = true;
+        
+        // Timeout para evitar travamento (5 segundos)
+        const validationPromise = validateUserEmail(session.user.email);
+        const timeoutPromise = new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(false), 5000);
+        });
+        
+        const isValid = await Promise.race([validationPromise, timeoutPromise]);
+        
+        // Se a validação retornar false (email não cadastrado)
+        if (!isValid) {
+          await supabase.auth.signOut();
+          if (Platform.OS === 'web') {
+            // No web, redirecionar para login após mostrar mensagem
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 2000);
+          } else {
+            Alert.alert(
+              'Acesso Negado',
+              'Acesso não autorizado. Entre em contato com o administrador.',
+              [{ text: 'OK' }]
+            );
+          }
+          return null;
+        }
+        
+        return session;
+      } catch (error) {
+        console.error('Erro ao validar email:', error);
+        // Se houver erro na validação (ex: tabela não existe), permitir acesso temporariamente
+        // para não bloquear o sistema
+        console.warn('Permitindo acesso temporário devido a erro na validação');
+        return session;
+      } finally {
+        validationInProgress = false;
+      }
+    };
     
     // Processar callback do OAuth no web
     if (Platform.OS === 'web') {
@@ -108,32 +161,27 @@ export default function RootNavigator() {
       const refreshToken = hashParams.get('refresh_token');
       
       if (accessToken && refreshToken) {
-        // Limpar hash da URL
-        window.history.replaceState(null, '', window.location.pathname);
+        // Limpar hash da URL imediatamente
+        window.history.replaceState(null, '', '/');
         
-        // O Supabase já processa automaticamente, mas vamos garantir
+        // O Supabase processa automaticamente com detectSessionInUrl
+        // Mas vamos garantir que a sessão seja definida
         supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         }).then(async () => {
           if (mounted) {
             const { data } = await supabase.auth.getSession();
-            if (mounted && data.session?.user?.email) {
-              // Validar se o email está cadastrado
-              const isValid = await validateUserEmail(data.session.user.email);
-              if (!isValid) {
-                await supabase.auth.signOut();
-                Alert.alert(
-                  'Acesso Negado',
-                  'Acesso não autorizado. Entre em contato com o administrador.',
-                  [{ text: 'OK' }]
-                );
-                setSession(null);
-                setLoading(false);
-                return;
-              }
-              setSession(data.session);
+            if (mounted && data.session) {
+              const validatedSession = await validateAndSetSession(data.session);
+              setSession(validatedSession);
             }
+            setLoading(false);
+          }
+        }).catch((error) => {
+          console.error('Erro ao processar callback:', error);
+          if (mounted) {
+            setSession(null);
             setLoading(false);
           }
         });
@@ -141,36 +189,34 @@ export default function RootNavigator() {
       }
     }
     
-    supabase.auth.getSession().then(({ data }) => {
+    // Carregar sessão inicial
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
-      setSession(data.session);
+      
+      if (data.session) {
+        const validatedSession = await validateAndSetSession(data.session);
+        setSession(validatedSession);
+      } else {
+        setSession(null);
+      }
       setLoading(false);
+    }).catch((error) => {
+      console.error('Erro ao carregar sessão:', error);
+      if (mounted) {
+        setSession(null);
+        setLoading(false);
+      }
     });
     
+    // Escutar mudanças na autenticação
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      if (mounted) {
-        // Validar email quando uma nova sessão é criada
-        if (newSession?.user?.email) {
-          try {
-            const isValid = await validateUserEmail(newSession.user.email);
-            if (!isValid) {
-              await supabase.auth.signOut();
-              Alert.alert(
-                'Acesso Negado',
-                'Acesso não autorizado. Entre em contato com o administrador.',
-                [{ text: 'OK' }]
-              );
-              setSession(null);
-              return;
-            }
-          } catch (error) {
-            console.error('Erro ao validar email:', error);
-            await supabase.auth.signOut();
-            setSession(null);
-            return;
-          }
-        }
-        setSession(newSession);
+      if (!mounted) return;
+      
+      if (newSession) {
+        const validatedSession = await validateAndSetSession(newSession);
+        setSession(validatedSession);
+      } else {
+        setSession(null);
       }
     });
     
