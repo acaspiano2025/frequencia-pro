@@ -143,6 +143,7 @@ export async function upsertAttendance(payload: {
 
 // Users ------------------------------------------------------------------
 export async function fetchUserByEmail(email: string): Promise<User | null> {
+  const startTime = Date.now();
   try {
     console.log('🔍 Buscando usuário com email:', email);
     const res = await supabase
@@ -152,27 +153,37 @@ export async function fetchUserByEmail(email: string): Promise<User | null> {
       .eq('status', 'Ativo')
       .single();
     
+    const duration = Date.now() - startTime;
+    
     if (res.error) {
-      console.error('❌ Erro ao buscar usuário:', res.error);
+      console.error('❌ Erro ao buscar usuário (em', duration, 'ms):', res.error);
       
       // Erro de RLS (Row Level Security) - política bloqueando acesso
       if (res.error.code === '42501' || res.error.message?.includes('permission denied') || res.error.message?.includes('row-level security')) {
         console.error('❌ ERRO RLS: Política de segurança bloqueando acesso à tabela users');
-        console.error('📝 AÇÃO NECESSÁRIA: Execute o script AJUSTAR_POLITICAS_RLS.sql no Supabase');
-        console.error('Código do erro:', res.error.code);
-        console.error('Mensagem:', res.error.message);
+        console.error('📝 AÇÃO NECESSÁRIA: Execute o script VERIFICAR_E_CORRIGIR_POLITICAS.sql no Supabase SQL Editor');
+        console.error('   URL: https://supabase.com/dashboard > SQL Editor > New Query');
+        console.error('   Código do erro:', res.error.code);
+        console.error('   Mensagem:', res.error.message);
         return null;
       }
       
       if (res.error.code === 'PGRST116') {
         // No rows returned - email não cadastrado
-        console.warn('⚠️ Email não cadastrado:', email);
+        console.warn('⚠️ Email não cadastrado:', email, '(consulta levou', duration, 'ms)');
         return null;
       }
       
       if (res.error.code === '42P01') {
         // Tabela não existe
-        console.error('❌ Tabela users não existe! Execute SUPABASE_SETUP.sql');
+        console.error('❌ Tabela users não existe! Execute SUPABASE_SETUP.sql no Supabase SQL Editor');
+        return null;
+      }
+      
+      // Erro de timeout ou rede
+      if (res.error.message?.includes('timeout') || res.error.message?.includes('network') || duration > 5000) {
+        console.error('❌ TIMEOUT ou erro de rede ao buscar usuário (levou', duration, 'ms)');
+        console.error('   Verifique sua conexão com a internet e com o Supabase');
         return null;
       }
       
@@ -182,11 +193,11 @@ export async function fetchUserByEmail(email: string): Promise<User | null> {
     }
     
     if (!res.data) {
-      console.warn('⚠️ Nenhum dado retornado para o email:', email);
+      console.warn('⚠️ Nenhum dado retornado para o email:', email, '(consulta levou', duration, 'ms)');
       return null;
     }
     
-    console.log('✅ Usuário encontrado:', res.data.email, '- Perfil:', res.data.perfil);
+    console.log('✅ Usuário encontrado:', res.data.email, '- Perfil:', res.data.perfil, '(consulta levou', duration, 'ms)');
     return {
       id: res.data.id,
       email: res.data.email,
@@ -197,8 +208,9 @@ export async function fetchUserByEmail(email: string): Promise<User | null> {
       cadastrado_por: res.data.cadastrado_por ?? null,
     };
   } catch (error: any) {
+    const duration = Date.now() - startTime;
     // Se houver qualquer erro (tabela não existe, etc), retornar null
-    console.error('❌ Erro catch ao buscar usuário:', error);
+    console.error('❌ Erro catch ao buscar usuário (levou', duration, 'ms):', error?.message || error);
     return null;
   }
 }

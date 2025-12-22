@@ -102,17 +102,17 @@ export default function RootNavigator() {
     let mounted = true;
     let validationInProgress = false;
     
-    // Timeout de segurança para garantir que loading sempre termine (3 segundos)
+    // Timeout de segurança para garantir que loading sempre termine (2 segundos)
     const loadingTimeout = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('Timeout de carregamento - forçando exibição da tela');
+        console.warn('⚠️ Timeout de carregamento (2s) - forçando exibição da tela de login');
         setLoading(false);
         // Se não há sessão após timeout, mostrar login
         if (!session) {
           setSession(null);
         }
       }
-    }, 3000); // 3 segundos (reduzido para carregar mais rápido)
+    }, 2000); // 2 segundos - tempo curto para mostrar login rapidamente
     
     // Função para validar e processar sessão
     const validateAndSetSession = async (session: any) => {
@@ -128,13 +128,15 @@ export default function RootNavigator() {
       try {
         validationInProgress = true;
         
-        // Timeout curto para validação (2 segundos) - se demorar, assumir que está OK
+        // Timeout curto para validação (3 segundos) - se demorar, assumir que está OK
+        // Mas vamos aumentar para 3s para dar mais tempo para políticas RLS resolverem
         const validationPromise = validateUserEmail(session.user.email);
         const timeoutPromise = new Promise<boolean>((resolve) => {
           setTimeout(() => {
-            console.warn('⚠️ Timeout na validação - permitindo acesso (validação pode ser executada em background)');
+            console.warn('⚠️ Timeout na validação (3s) - pode ser problema de RLS ou rede');
+            console.warn('   Permitindo acesso temporário - validação continuará em background');
             resolve(true); // Em caso de timeout, permitir acesso
-          }, 2000); // 2 segundos - bem curto
+          }, 3000); // 3 segundos - tempo suficiente para resposta normal
         });
         
         const isValid = await Promise.race([validationPromise, timeoutPromise]);
@@ -232,10 +234,22 @@ export default function RootNavigator() {
         }
         
         // Carregar sessão apenas se houver indicativo de sessão
-        const { data } = await supabase.auth.getSession();
+        console.log('🔍 Verificando sessão atual...');
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('❌ Erro ao buscar sessão:', sessionError);
+          if (mounted) {
+            setSession(null);
+            setLoading(false);
+          }
+          return;
+        }
+        
         if (!mounted) return;
         
         if (data.session) {
+          console.log('✅ Sessão encontrada para:', data.session.user.email);
           // Primeiro, mostrar a sessão sem validação para não travar o carregamento
           setSession(data.session);
           setLoading(false);
@@ -268,6 +282,7 @@ export default function RootNavigator() {
             console.warn('⚠️ Mantendo sessão devido a erro na validação');
           });
         } else {
+          console.log('ℹ️ Nenhuma sessão ativa - mostrando tela de login');
           setSession(null);
           setLoading(false);
         }
