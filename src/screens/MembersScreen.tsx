@@ -73,7 +73,11 @@ export default function MembersScreen() {
     });
     
     if (duplicateMember) {
-      Alert.alert('Atenção', `Já existe um membro cadastrado com o nome "${duplicateMember.name}".\n\nNão é permitido cadastrar nomes duplicados.`);
+      Alert.alert(
+        '⚠️ Nome Duplicado',
+        `Não é possível cadastrar este membro!\n\nJá existe um membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`,
+        [{ text: 'Entendi', style: 'default' }]
+      );
       return;
     }
     
@@ -136,7 +140,11 @@ export default function MembersScreen() {
     });
     
     if (duplicateMember) {
-      Alert.alert('Atenção', `Já existe um membro cadastrado com o nome "${duplicateMember.name}".\n\nNão é permitido cadastrar nomes duplicados.`);
+      Alert.alert(
+        '⚠️ Nome Duplicado',
+        `Não é possível atualizar este membro!\n\nJá existe outro membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`,
+        [{ text: 'Entendi', style: 'default' }]
+      );
       return;
     }
     
