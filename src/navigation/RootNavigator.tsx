@@ -206,13 +206,16 @@ export default function RootNavigator() {
     const loadInitialSession = async () => {
       try {
         // No web, verificar primeiro se há callback OAuth antes de chamar Supabase
-        if (Platform.OS === 'web') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
           // Se não há callback e não há token salvo, pular a verificação inicial
           const hasHash = window.location.hash.includes('access_token');
-          const hasToken = localStorage.getItem('sb-lpwsggnkwbyyjcytuiwh-auth-token');
+          const hasToken = typeof localStorage !== 'undefined' 
+            ? localStorage.getItem('sb-lpwsggnkwbyyjcytuiwh-auth-token') 
+            : null;
           
           if (!hasHash && !hasToken) {
             // Não há sessão prévia, mostrar login diretamente
+            console.log('🚀 Nenhuma sessão prévia encontrada - mostrando tela de login');
             setSession(null);
             setLoading(false);
             return;
