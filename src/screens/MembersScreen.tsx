@@ -66,18 +66,36 @@ export default function MembersScreen() {
     
     // Verificar se já existe um membro com o mesmo nome (ignorando maiúsculas/minúsculas e acentos)
     const normalizedNewName = normalizeText(trimmedName);
+    console.log('Validando nome:', trimmedName, 'Normalizado:', normalizedNewName);
+    console.log('Total de membros:', members.length);
+    
     const duplicateMember = members.find((member) => {
       if (!member.name) return false;
       const normalizedMemberName = normalizeText(member.name.trim());
-      return normalizedMemberName === normalizedNewName;
+      const isDuplicate = normalizedMemberName === normalizedNewName;
+      if (isDuplicate) {
+        console.log('Nome duplicado encontrado:', member.name, 'Normalizado:', normalizedMemberName);
+      }
+      return isDuplicate;
     });
     
     if (duplicateMember) {
-      Alert.alert(
-        '⚠️ Nome Duplicado',
-        `Não é possível cadastrar este membro!\n\nJá existe um membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`,
-        [{ text: 'Entendi', style: 'default' }]
-      );
+      console.log('Exibindo alerta de duplicado para:', duplicateMember.name);
+      
+      const message = `⚠️ Nome Duplicado\n\nNão é possível cadastrar este membro!\n\nJá existe um membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`;
+      
+      // No web, usar window.alert que é mais confiável
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
+        window.alert(message);
+      } else {
+        // No mobile, usar Alert.alert
+        Alert.alert(
+          '⚠️ Nome Duplicado',
+          `Não é possível cadastrar este membro!\n\nJá existe um membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`,
+          [{ text: 'Entendi', style: 'default' }],
+          { cancelable: true }
+        );
+      }
       return;
     }
     
@@ -140,11 +158,20 @@ export default function MembersScreen() {
     });
     
     if (duplicateMember) {
-      Alert.alert(
-        '⚠️ Nome Duplicado',
-        `Não é possível atualizar este membro!\n\nJá existe outro membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`,
-        [{ text: 'Entendi', style: 'default' }]
-      );
+      const message = `⚠️ Nome Duplicado\n\nNão é possível atualizar este membro!\n\nJá existe outro membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`;
+      
+      // No web, usar window.alert que é mais confiável
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
+        window.alert(message);
+      } else {
+        // No mobile, usar Alert.alert
+        Alert.alert(
+          '⚠️ Nome Duplicado',
+          `Não é possível atualizar este membro!\n\nJá existe outro membro cadastrado com o nome:\n"${duplicateMember.name}"\n\nPor favor, use um nome diferente.`,
+          [{ text: 'Entendi', style: 'default' }],
+          { cancelable: true }
+        );
+      }
       return;
     }
     
