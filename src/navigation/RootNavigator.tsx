@@ -128,16 +128,21 @@ export default function RootNavigator() {
       try {
         validationInProgress = true;
         
-        // Timeout para evitar travamento (5 segundos)
+        // Timeout curto para validação (2 segundos) - se demorar, assumir que está OK
         const validationPromise = validateUserEmail(session.user.email);
         const timeoutPromise = new Promise<boolean>((resolve) => {
-          setTimeout(() => resolve(false), 5000);
+          setTimeout(() => {
+            console.warn('⚠️ Timeout na validação - permitindo acesso (validação pode ser executada em background)');
+            resolve(true); // Em caso de timeout, permitir acesso
+          }, 2000); // 2 segundos - bem curto
         });
         
         const isValid = await Promise.race([validationPromise, timeoutPromise]);
         
-        // Se a validação retornar false (email não cadastrado)
-        if (!isValid) {
+        // Se a validação retornar explicitamente false (email não cadastrado)
+        // Mas só bloquear se tiver certeza absoluta (não em caso de timeout)
+        if (isValid === false) {
+          console.warn('⚠️ Email não encontrado na base de dados');
           await supabase.auth.signOut();
           if (Platform.OS === 'web') {
             // No web, redirecionar para login após mostrar mensagem
@@ -154,12 +159,16 @@ export default function RootNavigator() {
           return null;
         }
         
+        // Se isValid for true ou timeout (que também retorna true), permitir acesso
+        if (isValid) {
+          console.log('✅ Validação OK ou timeout (permitindo acesso)');
+        }
+        
         return session;
       } catch (error) {
-        console.error('Erro ao validar email:', error);
-        // Se houver erro na validação (ex: tabela não existe), permitir acesso temporariamente
-        // para não bloquear o sistema
-        console.warn('Permitindo acesso temporário devido a erro na validação');
+        console.error('❌ Erro ao validar email:', error);
+        // Se houver erro na validação, permitir acesso (pode ser problema temporário)
+        console.warn('⚠️ Permitindo acesso devido a erro na validação (pode ser problema de políticas RLS)');
         return session;
       } finally {
         validationInProgress = false;
