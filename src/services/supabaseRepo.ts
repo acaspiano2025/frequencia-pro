@@ -152,16 +152,27 @@ export async function fetchUserByEmail(email: string): Promise<User | null> {
       .single();
     
     if (res.error) {
-      if (res.error.code === 'PGRST116' || res.error.code === '42P01') {
-        // No rows returned ou tabela não existe
-        console.warn('Tabela users não encontrada ou email não cadastrado:', email);
+      // Erro de RLS (Row Level Security) - política bloqueando acesso
+      if (res.error.code === '42501' || res.error.message?.includes('permission denied') || res.error.message?.includes('row-level security')) {
+        console.error('❌ ERRO RLS: Política de segurança bloqueando acesso à tabela users');
+        console.error('📝 Execute o script AJUSTAR_POLITICAS_RLS.sql no Supabase para corrigir');
+        console.error('Detalhes:', res.error);
         return null;
       }
+      
+      if (res.error.code === 'PGRST116' || res.error.code === '42P01') {
+        // No rows returned ou tabela não existe
+        console.warn('Email não cadastrado ou tabela não encontrada:', email);
+        return null;
+      }
+      
       // Se for erro de tabela não existe, retornar null em vez de lançar erro
       if (res.error.message?.includes('does not exist') || res.error.message?.includes('não existe')) {
         console.warn('Tabela users não existe ainda. Criando estrutura...');
         return null;
       }
+      
+      console.error('Erro ao buscar usuário:', res.error);
       throw res.error;
     }
     
