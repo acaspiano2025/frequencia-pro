@@ -60,12 +60,7 @@ export const commonStyles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: 16,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-      },
-    }),
-  },
+  } as any,
   inputFocused: {
     borderColor: colors.primary,
     backgroundColor: colors.surface,

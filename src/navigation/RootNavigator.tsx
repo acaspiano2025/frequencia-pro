@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { enableScreens } from 'react-native-screens';
 
 import { supabase } from '../lib/supabase';
-import { validateUserEmail } from '../services/auth';
 import { colors } from '../theme/colors';
 import AttendanceScreen from '../screens/AttendanceScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -100,82 +99,6 @@ export default function RootNavigator() {
 
   useEffect(() => {
     let mounted = true;
-    let validationInProgress = false;
-    
-    // Timeout de segurança para garantir que loading sempre termine (2 segundos)
-    const loadingTimeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('⚠️ Timeout de carregamento (2s) - forçando exibição da tela de login');
-        setLoading(false);
-        // Se não há sessão após timeout, mostrar login
-        if (!session) {
-          setSession(null);
-        }
-      }
-    }, 2000); // 2 segundos - tempo curto para mostrar login rapidamente
-    
-    // Função para validar e processar sessão
-    const validateAndSetSession = async (session: any) => {
-      if (!mounted || !session?.user?.email) {
-        return session;
-      }
-      
-      // Evitar validações duplicadas
-      if (validationInProgress) {
-        return session;
-      }
-      
-      try {
-        validationInProgress = true;
-        
-        // Timeout curto para validação (3 segundos) - se demorar, assumir que está OK
-        // Mas vamos aumentar para 3s para dar mais tempo para políticas RLS resolverem
-        const validationPromise = validateUserEmail(session.user.email);
-        const timeoutPromise = new Promise<boolean>((resolve) => {
-          setTimeout(() => {
-            console.warn('⚠️ Timeout na validação (3s) - pode ser problema de RLS ou rede');
-            console.warn('   Permitindo acesso temporário - validação continuará em background');
-            resolve(true); // Em caso de timeout, permitir acesso
-          }, 3000); // 3 segundos - tempo suficiente para resposta normal
-        });
-        
-        const isValid = await Promise.race([validationPromise, timeoutPromise]);
-        
-        // Se a validação retornar explicitamente false (email não cadastrado)
-        // Mas só bloquear se tiver certeza absoluta (não em caso de timeout)
-        if (isValid === false) {
-          console.warn('⚠️ Email não encontrado na base de dados');
-          await supabase.auth.signOut();
-          if (Platform.OS === 'web') {
-            // No web, redirecionar para login após mostrar mensagem
-            setTimeout(() => {
-              window.location.href = '/';
-            }, 2000);
-          } else {
-            Alert.alert(
-              'Acesso Negado',
-              'Acesso não autorizado. Entre em contato com o administrador.',
-              [{ text: 'OK' }]
-            );
-          }
-          return null;
-        }
-        
-        // Se isValid for true ou timeout (que também retorna true), permitir acesso
-        if (isValid) {
-          console.log('✅ Validação OK ou timeout (permitindo acesso)');
-        }
-        
-        return session;
-      } catch (error) {
-        console.error('❌ Erro ao validar email:', error);
-        // Se houver erro na validação, permitir acesso (pode ser problema temporário)
-        console.warn('⚠️ Permitindo acesso devido a erro na validação (pode ser problema de políticas RLS)');
-        return session;
-      } finally {
-        validationInProgress = false;
-      }
-    };
     
     // Processar callback do OAuth no web
     if (Platform.OS === 'web') {
@@ -184,134 +107,41 @@ export default function RootNavigator() {
       const refreshToken = hashParams.get('refresh_token');
       
       if (accessToken && refreshToken) {
-        // Limpar hash da URL imediatamente
-        window.history.replaceState(null, '', '/');
+        // Limpar hash da URL
+        window.history.replaceState(null, '', window.location.pathname);
         
-        // O Supabase processa automaticamente com detectSessionInUrl
-        // Mas vamos garantir que a sessão seja definida
+        // O Supabase já processa automaticamente, mas vamos garantir
         supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
-        }).then(async () => {
+        }).then(() => {
           if (mounted) {
-            const { data } = await supabase.auth.getSession();
-            if (mounted && data.session) {
-              const validatedSession = await validateAndSetSession(data.session);
-              setSession(validatedSession);
-            }
-            setLoading(false);
-          }
-        }).catch((error) => {
-          console.error('Erro ao processar callback:', error);
-          if (mounted) {
-            setSession(null);
-            setLoading(false);
+            supabase.auth.getSession().then(({ data }) => {
+              if (mounted) {
+                setSession(data.session);
+                setLoading(false);
+              }
+            });
           }
         });
         return;
       }
     }
     
-    // Carregar sessão inicial - apenas se houver hash de callback OAuth ou localStorage
-    // Isso evita chamadas automáticas desnecessárias ao Supabase
-    const loadInitialSession = async () => {
-      try {
-        // No web, verificar primeiro se há callback OAuth antes de chamar Supabase
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          // Se não há callback e não há token salvo, pular a verificação inicial
-          const hasHash = window.location.hash.includes('access_token');
-          const hasToken = typeof localStorage !== 'undefined' 
-            ? localStorage.getItem('sb-lpwsggnkwbyyjcytuiwh-auth-token') 
-            : null;
-          
-          if (!hasHash && !hasToken) {
-            // Não há sessão prévia, mostrar login diretamente
-            console.log('🚀 Nenhuma sessão prévia encontrada - mostrando tela de login');
-            setSession(null);
-            setLoading(false);
-            return;
-          }
-        }
-        
-        // Carregar sessão apenas se houver indicativo de sessão
-        console.log('🔍 Verificando sessão atual...');
-        const { data, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('❌ Erro ao buscar sessão:', sessionError);
-          if (mounted) {
-            setSession(null);
-            setLoading(false);
-          }
-          return;
-        }
-        
-        if (!mounted) return;
-        
-        if (data.session) {
-          console.log('✅ Sessão encontrada para:', data.session.user.email);
-          // Primeiro, mostrar a sessão sem validação para não travar o carregamento
-          setSession(data.session);
-          setLoading(false);
-          
-          // Validar em background (sem bloquear a UI)
-          validateAndSetSession(data.session).then((validatedSession) => {
-            if (mounted) {
-              if (validatedSession) {
-                console.log('✅ Sessão validada com sucesso');
-                setSession(validatedSession);
-              } else {
-                console.warn('⚠️ Validação falhou - removendo sessão');
-                // Se a validação falhar, fazer logout
-                supabase.auth.signOut();
-                setSession(null);
-                if (Platform.OS === 'web') {
-                  setTimeout(() => {
-                    Alert.alert(
-                      'Acesso Negado',
-                      'Acesso não autorizado. Entre em contato com o administrador.',
-                      [{ text: 'OK' }]
-                    );
-                  }, 500);
-                }
-              }
-            }
-          }).catch((error) => {
-            console.error('❌ Erro na validação em background:', error);
-            // Em caso de erro, manter a sessão por enquanto (pode ser problema temporário)
-            console.warn('⚠️ Mantendo sessão devido a erro na validação');
-          });
-        } else {
-          console.log('ℹ️ Nenhuma sessão ativa - mostrando tela de login');
-          setSession(null);
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Erro ao carregar sessão:', error);
-        if (mounted) {
-          setSession(null);
-          setLoading(false);
-        }
-      }
-    };
-    
-    loadInitialSession();
-    
-    // Escutar mudanças na autenticação
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      
-      if (newSession) {
-        const validatedSession = await validateAndSetSession(newSession);
-        setSession(validatedSession);
-      } else {
-        setSession(null);
+      setSession(data.session);
+      setLoading(false);
+    });
+    
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (mounted) {
+        setSession(newSession);
       }
     });
     
     return () => {
       mounted = false;
-      clearTimeout(loadingTimeout);
       listener?.subscription.unsubscribe();
     };
   }, []);
@@ -320,9 +150,6 @@ export default function RootNavigator() {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.textSecondary, fontSize: 14 }}>
-          Carregando...
-        </Text>
       </View>
     );
   }
@@ -339,4 +166,3 @@ export default function RootNavigator() {
     </Stack.Navigator>
   );
 }
-

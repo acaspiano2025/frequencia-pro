@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, Pressable } from 'react-native';
+import { StyleSheet, Text, View, ScrollView } from 'react-native';
 
 import { atualizarFrequenciaPorPessoa, contagemMacro } from '../domain/frequency';
-import { useUser } from '../contexts/UserContext';
-import { createUser, fetchOperators, updateUser } from '../services/supabaseRepo';
 import { fetchAttendance, fetchMeetings, fetchMembers } from '../services/supabaseRepo';
 import { colors } from '../theme/colors';
 import { commonStyles } from '../theme/styles';
-import { User } from '../domain/types';
 
 export default function DashboardScreen() {
-  const { user, canManageOperators, refreshUser } = useUser();
   const [totalMeetings, setTotalMeetings] = useState(0);
   const [totalMeetingsRealized, setTotalMeetingsRealized] = useState(0);
   const [averageFrequency, setAverageFrequency] = useState<number | null>(null);
@@ -21,26 +17,6 @@ export default function DashboardScreen() {
     time?: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Estados para cadastro de operadores
-  const [showOperatorModal, setShowOperatorModal] = useState(false);
-  const [showMenuDropdown, setShowMenuDropdown] = useState(false);
-  const [showOperatorsList, setShowOperatorsList] = useState(false);
-  const [operators, setOperators] = useState<User[]>([]);
-  const [operatorEmail, setOperatorEmail] = useState('');
-  const [operatorName, setOperatorName] = useState('');
-  const [editingOperator, setEditingOperator] = useState<User | null>(null);
-  const [operatorLoading, setOperatorLoading] = useState(false);
-
-  // Fechar menu dropdown quando clicar fora
-  useEffect(() => {
-    if (showMenuDropdown) {
-      const timer = setTimeout(() => {
-        // Fechar automaticamente após 5 segundos ou quando necessário
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [showMenuDropdown]);
 
   useEffect(() => {
     const load = async () => {
@@ -51,12 +27,6 @@ export default function DashboardScreen() {
           fetchMembers(),
           fetchAttendance(),
         ]);
-        
-        // Carregar operadores se o usuário pode gerenciá-los
-        if (canManageOperators()) {
-          const ops = await fetchOperators();
-          setOperators(ops);
-        }
 
         const today = new Date();
         setTotalMeetings(meetings.length);
@@ -103,102 +73,7 @@ export default function DashboardScreen() {
       }
     };
     load();
-  }, [canManageOperators]);
-  
-  const handleOpenOperatorModal = () => {
-    setOperatorEmail('');
-    setOperatorName('');
-    setEditingOperator(null);
-    setShowOperatorModal(true);
-  };
-  
-  const handleCloseOperatorModal = () => {
-    setShowOperatorModal(false);
-    setOperatorEmail('');
-    setOperatorName('');
-    setEditingOperator(null);
-  };
-  
-  const handleEditOperator = (operator: User) => {
-    setOperatorEmail(operator.email);
-    setOperatorName(operator.nome_completo);
-    setEditingOperator(operator);
-    setShowOperatorModal(true);
-  };
-  
-  const handleSaveOperator = async () => {
-    if (!operatorEmail || !operatorName) {
-      Alert.alert('Atenção', 'Preencha todos os campos obrigatórios.');
-      return;
-    }
-    
-    // Validar se é Gmail
-    if (!operatorEmail.toLowerCase().endsWith('@gmail.com')) {
-      Alert.alert('Erro', 'Apenas emails Gmail são permitidos.');
-      return;
-    }
-    
-    if (!user) {
-      Alert.alert('Erro', 'Usuário não encontrado.');
-      return;
-    }
-    
-    setOperatorLoading(true);
-    try {
-      if (editingOperator) {
-        // Editar operador existente
-        await updateUser(editingOperator.id, {
-          nome_completo: operatorName.trim(),
-        });
-        Alert.alert('Sucesso', 'Operador atualizado com sucesso!');
-      } else {
-        // Criar novo operador
-        await createUser({
-          email: operatorEmail.trim(),
-          nome_completo: operatorName.trim(),
-          perfil: 'Operador',
-          cadastrado_por: user.id,
-        });
-        Alert.alert('Sucesso', 'Operador cadastrado com sucesso!');
-      }
-      
-      // Recarregar lista de operadores
-      const ops = await fetchOperators();
-      setOperators(ops);
-      handleCloseOperatorModal();
-    } catch (error: any) {
-      Alert.alert('Erro', error.message || 'Erro ao salvar operador.');
-    } finally {
-      setOperatorLoading(false);
-    }
-  };
-  
-  const handleToggleOperatorStatus = async (operator: User) => {
-    const newStatus = operator.status === 'Ativo' ? 'Inativo' : 'Ativo';
-    const action = newStatus === 'Ativo' ? 'ativar' : 'desativar';
-    
-    Alert.alert(
-      'Confirmar',
-      `Tem certeza que deseja ${action} o operador ${operator.nome_completo}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await updateUser(operator.id, { status: newStatus });
-              const ops = await fetchOperators();
-              setOperators(ops);
-              Alert.alert('Sucesso', `Operador ${action}do com sucesso!`);
-            } catch (error: any) {
-              Alert.alert('Erro', error.message || 'Erro ao atualizar operador.');
-            }
-          },
-        },
-      ]
-    );
-  };
+  }, []);
 
   const formatPercentage = (value: number | null) => {
     if (value === null) return '—';
@@ -212,22 +87,8 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.headerContainer}>
-        <View style={styles.headerTextContainer}>
-          <Text style={commonStyles.title}>Dashboard</Text>
-          <Text style={commonStyles.caption}>Visão geral do sistema de frequência</Text>
-        </View>
-        
-        {/* Menu Dropdown - Visível apenas para Admin e Programador */}
-        {canManageOperators() && (
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={() => setShowMenuDropdown(!showMenuDropdown)}
-            >
-              <Text style={styles.menuIcon}>⋮</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <Text style={commonStyles.title}>Dashboard</Text>
+        <Text style={commonStyles.caption}>Visão geral do sistema de frequência</Text>
       </View>
       
       <View style={styles.cards}>
@@ -293,146 +154,7 @@ export default function DashboardScreen() {
             Use as abas abaixo para gerenciar reuniões, registrar frequência e visualizar relatórios detalhados com todos os cálculos de frequência.
           </Text>
         </View>
-        
-        {/* Lista de Operadores - Visível apenas para Admin e Programador */}
-        {canManageOperators() && showOperatorsList && operators.length > 0 && (
-          <View style={[commonStyles.card, styles.operatorsCard]}>
-            <Text style={styles.operatorsTitle}>Operadores Cadastrados</Text>
-            {operators.map((operator) => (
-              <View key={operator.id} style={styles.operatorItem}>
-                <View style={styles.operatorInfo}>
-                  <Text style={styles.operatorName}>{operator.nome_completo}</Text>
-                  <Text style={styles.operatorEmail}>{operator.email}</Text>
-                  <View style={styles.operatorBadges}>
-                    <View style={[
-                      commonStyles.badge,
-                      operator.status === 'Ativo' ? commonStyles.badgeSuccess : commonStyles.badgeError
-                    ]}>
-                      <Text style={[
-                        commonStyles.badgeText,
-                        operator.status === 'Ativo' ? commonStyles.badgeTextSuccess : commonStyles.badgeTextError
-                      ]}>
-                        {operator.status}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.operatorActions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.editButton]}
-                    onPress={() => handleEditOperator(operator)}
-                  >
-                    <Text style={styles.actionButtonText}>Editar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      operator.status === 'Ativo' ? styles.deactivateButton : styles.activateButton
-                    ]}
-                    onPress={() => handleToggleOperatorStatus(operator)}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {operator.status === 'Ativo' ? 'Desativar' : 'Ativar'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
       </View>
-      
-      {/* Modal do Menu Dropdown */}
-      <Modal
-        visible={showMenuDropdown}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowMenuDropdown(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowMenuDropdown(false)}
-        >
-          <View style={styles.dropdownMenuContainer}>
-            <Pressable
-              style={styles.dropdownItem}
-              onPress={() => {
-                handleOpenOperatorModal();
-                setShowMenuDropdown(false);
-              }}
-            >
-              <Text style={styles.dropdownItemText}>➕ Cadastrar Operador</Text>
-            </Pressable>
-            <Pressable
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowOperatorsList(!showOperatorsList);
-                setShowMenuDropdown(false);
-              }}
-            >
-              <Text style={styles.dropdownItemText}>
-                {showOperatorsList ? '👁️ Ocultar Operadores' : '👁️ Ver Operadores'}
-              </Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Modal de Cadastro/Edição de Operador */}
-      <Modal
-        visible={showOperatorModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={handleCloseOperatorModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {editingOperator ? 'Editar Operador' : 'Cadastrar Novo Operador'}
-            </Text>
-            
-            <Text style={commonStyles.label}>Email (Gmail) *</Text>
-            <TextInput
-              placeholder="exemplo@gmail.com"
-              placeholderTextColor={colors.textTertiary}
-              style={commonStyles.input}
-              value={operatorEmail}
-              onChangeText={setOperatorEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              editable={!editingOperator}
-            />
-            
-            <Text style={commonStyles.label}>Nome Completo *</Text>
-            <TextInput
-              placeholder="Nome completo do operador"
-              placeholderTextColor={colors.textTertiary}
-              style={commonStyles.input}
-              value={operatorName}
-              onChangeText={setOperatorName}
-              autoCapitalize="words"
-            />
-            
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[commonStyles.button, styles.cancelButton]}
-                onPress={handleCloseOperatorModal}
-              >
-                <Text style={[commonStyles.buttonText, { color: colors.textPrimary }]}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[commonStyles.button, commonStyles.buttonPrimary, operatorLoading && commonStyles.buttonDisabled]}
-                onPress={handleSaveOperator}
-                disabled={operatorLoading}
-              >
-                <Text style={commonStyles.buttonText}>
-                  {operatorLoading ? 'Salvando...' : editingOperator ? 'Atualizar' : 'Cadastrar'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -533,163 +255,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 16,
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  menuContainer: {
-    position: 'relative',
-    marginTop: 8,
-  },
-  menuButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.shadowMedium,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  menuIcon: {
-    fontSize: 20,
-    color: colors.textPrimary,
-    fontWeight: 'bold',
-  },
-  dropdownMenuContainer: {
-    position: 'absolute',
-    top: 80,
-    right: 20,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.shadowMedium,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 5,
-    minWidth: 220,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  dropdownItemText: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  operatorsCard: {
-    padding: 20,
-  },
-  operatorsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 16,
-  },
-  operatorItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  operatorInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  operatorName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  operatorEmail: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  operatorBadges: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  operatorActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  editButton: {
-    backgroundColor: colors.primary + '15',
-    borderColor: colors.primary,
-  },
-  activateButton: {
-    backgroundColor: colors.success + '15',
-    borderColor: colors.success,
-  },
-  deactivateButton: {
-    backgroundColor: colors.error + '15',
-    borderColor: colors.error,
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 500,
-    shadowColor: colors.shadowMedium,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 24,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
   },
 });
