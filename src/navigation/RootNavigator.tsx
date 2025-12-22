@@ -102,6 +102,18 @@ export default function RootNavigator() {
     let mounted = true;
     let validationInProgress = false;
     
+    // Timeout de segurança para garantir que loading sempre termine
+    const loadingTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Timeout de carregamento - forçando exibição da tela de login');
+        setLoading(false);
+        // Se não há sessão após timeout, mostrar login
+        if (!session) {
+          setSession(null);
+        }
+      }
+    }, 10000); // 10 segundos
+    
     // Função para validar e processar sessão
     const validateAndSetSession = async (session: any) => {
       if (!mounted || !session?.user?.email) {
@@ -222,6 +234,7 @@ export default function RootNavigator() {
     
     return () => {
       mounted = false;
+      clearTimeout(loadingTimeout);
       listener?.subscription.unsubscribe();
     };
   }, []);
@@ -230,6 +243,9 @@ export default function RootNavigator() {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 16, color: colors.textSecondary, fontSize: 14 }}>
+          Carregando...
+        </Text>
       </View>
     );
   }
