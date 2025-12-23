@@ -157,13 +157,6 @@ export default function ReportsScreen() {
                     </Text>
                     <Text style={styles.statNote}>*Agendado</Text>
                   </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>DOM</Text>
-                    <Text style={[styles.statValue, { color: getPercentageColor(item.freqDom) }]}>
-                      {pct(item.freqDom)}
-                    </Text>
-                    <Text style={styles.statNote}>*Agendado</Text>
-                  </View>
                 </View>
               </View>
 
