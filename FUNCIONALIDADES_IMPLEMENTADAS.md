@@ -367,3 +367,6 @@ O aplicativo Frequência Pro está **funcionando em produção** com todas as fu
 3. Testar e publicar versão mobile
 4. Adicionar mais tipos de relatórios e exportações
 
+
+
+

@@ -43,3 +43,6 @@ ORDER BY data_cadastro;
 -- Se você ver a política "Permitir leitura de usuários para validação" e os 2 usuários,
 -- está tudo correto! ✅
 
+
+
+

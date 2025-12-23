@@ -99,3 +99,6 @@ Após configurar tudo:
 - **Causa**: Políticas de segurança bloqueando acesso
 - **Solução**: Verifique se as políticas em `SUPABASE_SETUP.sql` foram criadas corretamente
 
+
+
+

@@ -26,3 +26,6 @@ ORDER BY data_cadastro;
 
 -- Se você vir os dois usuários na lista acima, está tudo certo! ✅
 
+
+
+

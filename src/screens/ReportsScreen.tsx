@@ -167,7 +167,7 @@ export default function ReportsScreen() {
                 </View>
               </View>
 
-              {/* Frequências por Dia (5ª, SAB, AMBAS) */}
+              {/* Frequências por Dia (5ª, SAB, DOM, AMBAS) */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Frequências por Dia</Text>
                 <View style={styles.statsGrid}>
@@ -192,6 +192,13 @@ export default function ReportsScreen() {
                         <Text style={styles.statLabel}>SAB</Text>
                         <Text style={[styles.statValue, { color: getPercentageColor(item.freqSab) }]}>
                           {pct(item.freqSab)}
+                        </Text>
+                        <Text style={styles.statNote}>Realizado</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>DOM</Text>
+                        <Text style={[styles.statValue, { color: getPercentageColor(item.freqDomRealizado) }]}>
+                          {pct(item.freqDomRealizado)}
                         </Text>
                         <Text style={styles.statNote}>Realizado</Text>
                       </View>

@@ -63,3 +63,6 @@ ON CONFLICT (email) DO NOTHING;
 -- Comentário: Após executar este script, os usuários poderão fazer login
 -- usando seus emails Gmail através do botão "Entrar com Google"
 
+
+
+

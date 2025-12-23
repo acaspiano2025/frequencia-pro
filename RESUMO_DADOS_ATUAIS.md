@@ -139,3 +139,6 @@ node test-supabase-connection.js
 
 **Última atualização:** Execute `node listar-dados-supabase.js` para atualizar este relatório.
 
+
+
+

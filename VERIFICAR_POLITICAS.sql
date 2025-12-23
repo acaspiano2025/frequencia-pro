@@ -26,3 +26,6 @@ WHERE tablename = 'users';
 -- Se rowsecurity for false, execute:
 -- ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
+
+
+

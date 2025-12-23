@@ -58,3 +58,6 @@ Após executar com sucesso:
 2. Configure as URLs de callback no Supabase (Authentication → URL Configuration)
 3. Teste o login no aplicativo!
 
+
+
+

@@ -140,6 +140,7 @@ export function atualizarFrequenciaPorPessoa(
 
     const freq5a = denomRealizados.total5a > 0 ? presencas5a / denomRealizados.total5a : null;
     const freqSab = denomRealizados.totalSAB > 0 ? presencasSab / denomRealizados.totalSAB : null;
+    const freqDomRealizado = denomRealizados.totalDOM > 0 ? presencasDom / denomRealizados.totalDOM : null;
 
     const totalAmbasDenom = denomRealizados.total5a + denomRealizados.totalSAB;
     const freqAmbas =
@@ -168,6 +169,7 @@ export function atualizarFrequenciaPorPessoa(
       freqNormal,
       freqObrigacao,
       freqDom,
+      freqDomRealizado,
       freq5a: showAmbas ? null : freq5a,
       freqSab: showAmbas ? null : freqSab,
       freqAmbas: showAmbas ? freqAmbas : null,

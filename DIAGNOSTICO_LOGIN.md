@@ -73,3 +73,6 @@ O sistema agora mostra logs detalhados no console:
 
 Use esses logs para identificar onde está falhando.
 
+
+
+

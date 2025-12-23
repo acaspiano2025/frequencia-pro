@@ -127,3 +127,6 @@ Se precisar de ajuda, envie estas informações:
 2. ✅ Script de diagnóstico criado
 3. ⏳ **Aguardando seu teste** - Tente fazer login e me diga o que aparece no console!
 
+
+
+

@@ -49,6 +49,7 @@ export interface FrequenciaPorPessoa {
   freqNormal: number | null;
   freqObrigacao: number | null;
   freqDom: number | null;
+  freqDomRealizado: number | null;
   freq5a: number | null;
   freqSab: number | null;
   freqAmbas: number | null;
